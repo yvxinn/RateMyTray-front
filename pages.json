@@ -72,6 +72,13 @@
         "navigationBarTitleText": "菜品编辑"
       }
     },
+
+    {
+      "path": "pages/merchant/statistics/statistics",
+      "style": {
+        "navigationBarTitleText": "数据统计"
+      }
+    },
     {
       "path": "pages/profile/edit",
       "style": {

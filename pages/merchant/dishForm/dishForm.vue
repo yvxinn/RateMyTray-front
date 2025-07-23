@@ -160,12 +160,12 @@ const fetchDishDetails = async (id) => {
   });
   try {
     const res = await getDishDetail(id);
-    form.name = res.name;
-    form.description = res.description;
-    form.price = res.price;
-    form.imageUrl = res.imageUrl;
-    form.status = res.status;
-    form.tags = res.tags || [];
+    form.name = res.name || "";
+    form.description = res.description || "";
+    form.price = res.price || "";
+    form.imageUrl = res.imageUrl || "";
+    form.status = res.status || "available";
+    form.tags = Array.isArray(res.tags) ? res.tags : [];
   } catch (e) {
     console.error("Failed to fetch dish details:", e);
     uni.showToast({
@@ -183,18 +183,30 @@ const onStatusChange = (e) => {
 
 const chooseImage = async () => {
   if (isUploadingImage.value) return;
+
   try {
     const res = await uni.chooseImage({
       count: 1,
       sizeType: ["compressed"],
       sourceType: ["album", "camera"],
     });
+
     isUploadingImage.value = true;
     uni.showLoading({
       title: "上传中...",
     });
-    const uploadedUrl = await uploadFile("dishes", res.tempFilePaths[0]);
-    form.imageUrl = uploadedUrl;
+
+    const uploadedResult = await uploadFile("dishes", res.tempFilePaths[0]);
+    // 根据API文档，uploadFile返回 { fileUrl: '...' }
+    if (uploadedResult && uploadedResult.fileUrl) {
+      form.imageUrl = uploadedResult.fileUrl;
+    } else if (typeof uploadedResult === "string") {
+      // 兼容直接返回字符串的情况
+      form.imageUrl = uploadedResult;
+    } else {
+      throw new Error("上传返回格式异常");
+    }
+
     uni.showToast({
       title: "上传成功",
       icon: "success",
@@ -206,8 +218,10 @@ const chooseImage = async () => {
       icon: "none",
     });
   } finally {
-    uni.hideLoading();
-    isUploadingImage.value = false;
+    if (isUploadingImage.value) {
+      uni.hideLoading();
+      isUploadingImage.value = false;
+    }
   }
 };
 
@@ -226,12 +240,14 @@ const removeTag = (index) => {
 const submitForm = async () => {
   if (isSubmitting.value) return;
 
-  if (!form.name.trim()) {
+  // 表单验证
+  if (!form.name || !form.name.trim()) {
     return uni.showToast({
       title: "菜品名称不能为空",
       icon: "none",
     });
   }
+
   const priceValue = parseFloat(form.price);
   if (isNaN(priceValue) || priceValue <= 0) {
     return uni.showToast({
@@ -239,6 +255,9 @@ const submitForm = async () => {
       icon: "none",
     });
   }
+
+  // 确保imageUrl是字符串
+  const imageUrl = form.imageUrl ? String(form.imageUrl).trim() : "";
 
   isSubmitting.value = true;
   uni.showLoading({
@@ -248,22 +267,26 @@ const submitForm = async () => {
   try {
     const dataToSubmit = {
       name: form.name.trim(),
-      description: form.description.trim(),
+      description: form.description ? form.description.trim() : "",
       price: priceValue,
-      imageUrl: form.imageUrl.trim(),
-      tags: form.tags,
-      status: form.status,
+      imageUrl: imageUrl,
+      tags: Array.isArray(form.tags) ? form.tags : [],
+      status: form.status || "available",
     };
+
+    console.log("提交数据:", dataToSubmit); // 调试信息
 
     if (isEdit.value) {
       await merchantUpdateDish(dishId.value, dataToSubmit);
     } else {
       await merchantAddDish(windowId.value, dataToSubmit);
     }
+
     uni.showToast({
       title: "操作成功",
       icon: "success",
     });
+
     setTimeout(() => uni.navigateBack(), 1500);
   } catch (e) {
     console.error("Submission failed:", e);

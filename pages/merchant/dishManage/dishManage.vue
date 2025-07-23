@@ -8,60 +8,69 @@
       </button>
     </view>
 
-    <scroll-view scroll-y class="dish-list-scroll" @scrolltolower="loadMore">
-      <view v-if="loading && dishes.length === 0" class="loading-state"
-        >加载中...</view
-      >
-      <view v-else-if="dishes.length === 0 && !loading" class="no-data"
-        >暂无菜品，点击上方“新增菜品”添加</view
-      >
-      <view class="dish-card" v-for="dish in dishes" :key="dish.dishId">
-        <image
-          class="dish-image"
-          :src="
-            dish.imageUrl ||
-            'https://placehold.co/100x100/eeeeee/cccccc?text=无图'
-          "
-          mode="aspectFill"
-        ></image>
-        <view class="dish-info">
-          <text class="dish-name">{{ dish.name }}</text>
-          <text class="dish-price"
-            >¥{{ dish.price ? dish.price.toFixed(2) : "0.00" }}</text
-          >
-          <text
-            class="dish-status"
-            :class="
-              dish.status === 'available'
-                ? 'status-available'
-                : 'status-unavailable'
-            "
-          >
-            {{ dish.status === "available" ? "上架中" : "已下架" }}
-          </text>
-          <text class="dish-description">{{ dish.description }}</text>
+    <scroll-view
+      scroll-y
+      class="dish-list-scroll"
+      @scrolltolower="refreshDishList"
+      :enable-back-to-top="true"
+    >
+      <view v-if="loading" class="loading-state">
+        <uni-icons
+          type="spinner-cycle"
+          size="40"
+          color="#007aff"
+          class="loading-icon"
+        ></uni-icons>
+        <text>加载中...</text>
+      </view>
+      <view v-else-if="dishes.length === 0" class="no-data">
+        <uni-icons type="coffee" size="60" color="#cccccc"></uni-icons>
+        <text>暂无菜品，点击上方"新增菜品"添加</text>
+      </view>
+      <view v-else>
+        <view class="dish-card" v-for="dish in dishes" :key="dish.dishId">
+          <image
+            class="dish-image"
+            :src="resolveDishImage(dish.imageUrl)"
+            mode="aspectFill"
+            @error="handleImageError"
+          ></image>
+          <view class="dish-info">
+            <text class="dish-name">{{ dish.name }}</text>
+            <text class="dish-price">¥{{ (dish.price || 0).toFixed(2) }}</text>
+            <view class="dish-meta">
+              <text class="dish-status" :class="getStatusClass(dish.status)">
+                {{ getStatusText(dish.status) }}
+              </text>
+              <text class="dish-id">#{{ dish.dishId }}</text>
+            </view>
+            <text class="dish-description">{{
+              dish.description || "暂无描述"
+            }}</text>
+          </view>
+          <view class="dish-actions">
+            <button
+              class="action-button edit-button"
+              @click="goToDishForm('edit', dish)"
+            >
+              <uni-icons type="compose" size="14" color="#fff"></uni-icons>
+              <text class="button-text">编辑</text>
+            </button>
+            <button
+              class="action-button delete-button"
+              @click="confirmDelete(dish.dishId)"
+            >
+              <uni-icons type="trash" size="14" color="#fff"></uni-icons>
+              <text class="button-text">删除</text>
+            </button>
+          </view>
         </view>
-        <view class="dish-actions">
-          <button
-            class="action-button edit-button"
-            @click="goToDishForm('edit', dish)"
-          >
-            编辑
-          </button>
-          <button
-            class="action-button delete-button"
-            @click="confirmDelete(dish.dishId)"
-          >
-            删除
-          </button>
+
+        <view class="list-footer">
+          <uni-icons type="checkmarkempty" size="20" color="#999"></uni-icons>
+          <text>共 {{ dishes.length }} 个菜品</text>
         </view>
       </view>
-      <view v-if="loading && dishes.length > 0" class="loading-more"
-        >加载中...</view
-      >
-      <view v-if="!hasMore && dishes.length > 0" class="no-more"
-        >没有更多了</view
-      >
     </scroll-view>
 
     <!-- Confirmation dialog for deletion -->
@@ -81,17 +90,14 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import { merchantGetDishes, merchantDeleteDish } from "@/services/api.js";
+import { getWindowDetail, merchantDeleteDish } from "@/services/api.js";
 import { navigateTo, RoutePath } from "@/utils/router.js";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 
 const windowId = ref(null);
 const windowName = ref("");
 const dishes = ref([]);
-const page = ref(1);
-const size = ref(10);
 const loading = ref(false);
-const hasMore = ref(true);
 const dishIdToDelete = ref(null);
 const alertDialog = ref(null);
 
@@ -100,6 +106,12 @@ const resolveDishImage = (path) =>
     path,
     "https://placehold.co/100x100/eeeeee/cccccc?text=无图"
   ).value;
+
+// 处理图片加载错误
+const handleImageError = (e) => {
+  // 设置默认图片
+  e.target.src = "https://placehold.co/100x100/eeeeee/cccccc?text=无图";
+};
 
 onLoad((options) => {
   if (options.windowId) {
@@ -116,33 +128,26 @@ onLoad((options) => {
 
 onShow(() => {
   if (windowId.value) {
-    resetAndGetDishList();
+    getDishList();
   }
 });
 
-const resetAndGetDishList = () => {
-  page.value = 1;
-  dishes.value = [];
-  hasMore.value = true;
-  getDishList();
-};
-
+// 获取菜品列表（通过窗口详情API）
 const getDishList = async () => {
-  if (loading.value || !hasMore.value) return;
+  if (loading.value) return;
 
   loading.value = true;
   try {
-    const res = await merchantGetDishes(windowId.value, {
-      page: page.value,
-      size: size.value,
-    });
-    // Assuming API returns { dishes: [], pages: number }
-    if (res.dishes && res.dishes.length > 0) {
-      dishes.value.push(...res.dishes);
-      page.value++;
-      hasMore.value = page.value <= res.pages;
+    const windowDetail = await getWindowDetail(windowId.value);
+
+    if (windowDetail && windowDetail.dishes) {
+      dishes.value = windowDetail.dishes;
+      // 更新窗口名称（如果有变化）
+      if (windowDetail.windowName) {
+        windowName.value = windowDetail.windowName;
+      }
     } else {
-      hasMore.value = false;
+      dishes.value = [];
     }
   } catch (e) {
     console.error("Failed to get dish list:", e);
@@ -150,9 +155,15 @@ const getDishList = async () => {
       title: "获取菜品列表失败",
       icon: "none",
     });
+    dishes.value = [];
   } finally {
     loading.value = false;
   }
+};
+
+// 刷新菜品列表
+const refreshDishList = () => {
+  getDishList();
 };
 
 const goToDishForm = (type, dish = null) => {
@@ -183,7 +194,8 @@ const deleteDish = async () => {
       title: "菜品删除成功",
       icon: "success",
     });
-    resetAndGetDishList();
+    // 重新获取菜品列表
+    getDishList();
   } catch (e) {
     console.error("Failed to delete dish:", e);
     uni.showToast({
@@ -193,6 +205,34 @@ const deleteDish = async () => {
   } finally {
     uni.hideLoading();
     dishIdToDelete.value = null;
+  }
+};
+
+// 获取状态样式类名
+const getStatusClass = (status) => {
+  switch (status) {
+    case "available":
+      return "status-available";
+    case "unavailable":
+      return "status-unavailable";
+    case "pending":
+      return "status-pending";
+    default:
+      return "status-unknown";
+  }
+};
+
+// 获取状态显示文本
+const getStatusText = (status) => {
+  switch (status) {
+    case "available":
+      return "上架中";
+    case "unavailable":
+      return "已下架";
+    case "pending":
+      return "待审核";
+    default:
+      return "未知状态";
   }
 };
 </script>
@@ -287,12 +327,18 @@ const deleteDish = async () => {
   margin-bottom: 8rpx;
 }
 
+.dish-meta {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
 .dish-status {
   font-size: 26rpx;
   padding: 4rpx 12rpx;
   border-radius: 10rpx;
   align-self: flex-start;
-  margin-bottom: 8rpx;
+  margin-right: 10rpx;
 }
 
 .status-available {
@@ -305,6 +351,22 @@ const deleteDish = async () => {
   color: #dc3545;
 }
 
+.status-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-unknown {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
+
+.dish-id {
+  font-size: 24rpx;
+  color: #666;
+  font-family: monospace;
+}
+
 .dish-description {
   font-size: 28rpx;
   color: #666;
@@ -313,6 +375,7 @@ const deleteDish = async () => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  line-height: 1.4;
 }
 
 .dish-actions {
@@ -325,29 +388,110 @@ const deleteDish = async () => {
 .action-button {
   width: 120rpx;
   height: 65rpx;
-  font-size: 28rpx;
-  line-height: 65rpx;
+  font-size: 22rpx;
   border-radius: 15rpx;
   text-align: center;
   color: #fff;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  flex-direction: row;
+  border: none;
+  box-sizing: border-box;
+}
+
+.button-text {
+  font-size: 22rpx;
+  color: #fff;
+  line-height: 1;
 }
 
 .edit-button {
   background-color: #ffc107; /* Yellow */
 }
 
+.edit-button:active {
+  background-color: #e0a800;
+}
+
 .delete-button {
   background-color: #dc3545; /* Red */
 }
 
+.delete-button:active {
+  background-color: #c82333;
+}
+
 .no-data,
-.loading-more,
-.no-more,
-.loading-state {
+.loading-state,
+.list-footer {
   text-align: center;
   padding: 40rpx 0;
   color: #999;
   font-size: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.loading-state {
+  padding: 80rpx 0;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.list-footer {
+  text-align: center;
+  padding: 30rpx 0;
+  color: #999;
+  font-size: 26rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 20rpx;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 响应式优化 */
+@media screen and (max-width: 750rpx) {
+  .dish-card {
+    padding: 20rpx;
+  }
+
+  .dish-image {
+    width: 150rpx;
+    height: 150rpx;
+    margin-right: 20rpx;
+  }
+
+  .action-button {
+    width: 100rpx;
+    height: 60rpx;
+    font-size: 20rpx;
+    gap: 3rpx;
+  }
+
+  .button-text {
+    font-size: 20rpx;
+  }
+
+  .dish-actions {
+    gap: 12rpx;
+  }
 }
 </style>

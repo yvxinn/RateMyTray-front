@@ -126,6 +126,16 @@ export function getWindowDetail(windowId) {
 }
 
 /**
+ * 获取当前商户的窗口信息
+ */
+export function getMerchantWindow() {
+  return request({
+    url: "/merchant/window",
+    method: "get",
+  });
+}
+
+/**
  * 商家编辑窗口信息
  * @param {number} windowId
  * @param {object} data
@@ -135,6 +145,18 @@ export function merchantUpdateWindow(windowId, data) {
     url: `/merchant/windows/${windowId}`,
     method: "put",
     data,
+  });
+}
+
+/**
+ * 获取商家窗口统计数据
+ * @param {number} windowId - 窗口ID
+ * @returns {Promise} 统计数据
+ */
+export function getMerchantStatistics(windowId) {
+  return request({
+    url: `/merchant/windows/${windowId}/statistics`,
+    method: "get",
   });
 }
 
@@ -151,7 +173,7 @@ export function merchantGetDishes(windowId, params) {
   return request({
     url: `/merchant/windows/${windowId}/dishes`,
     method: "get",
-    params, // GET请求应该使用params
+    data: params, // GET请求使用data参数
   });
 }
 
@@ -269,6 +291,51 @@ export function merchantReplyComment(commentId, data) {
     url: `/comments/${commentId}/reply`,
     method: "post",
     data,
+  });
+}
+
+/**
+ * 获取商户窗口的所有评价（通过窗口详情）
+ * @param {number} windowId
+ */
+export function getMerchantComments(windowId) {
+  return request({
+    url: `/windows/${windowId}`,
+    method: "get",
+  }).then((response) => {
+    // 从窗口详情中提取评论和菜品评论
+    const windowComments = response.comments || [];
+    const dishComments = [];
+
+    // 从菜品中提取评论
+    if (response.dishes && Array.isArray(response.dishes)) {
+      response.dishes.forEach((dish) => {
+        if (dish.comments && Array.isArray(dish.comments)) {
+          dish.comments.forEach((comment) => {
+            dishComments.push({
+              ...comment,
+              targetType: "dish",
+              targetId: dish.dishId,
+              targetName: dish.name,
+            });
+          });
+        }
+      });
+    }
+
+    // 标记窗口评论
+    const processedWindowComments = windowComments.map((comment) => ({
+      ...comment,
+      targetType: "window",
+      targetId: response.windowId,
+      targetName: response.windowName,
+    }));
+
+    return {
+      windowComments: processedWindowComments,
+      dishComments: dishComments,
+      allComments: [...processedWindowComments, ...dishComments],
+    };
   });
 }
 

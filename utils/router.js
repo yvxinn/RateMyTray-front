@@ -26,6 +26,7 @@ export const RoutePath = {
   MERCHANT_WINDOW_MANAGE: "/pages/merchant/windowManage/windowManage",
   MERCHANT_DISH_MANAGE: "/pages/merchant/dishManage/dishManage",
   MERCHANT_DISH_FORM: "/pages/merchant/dishForm/dishForm",
+  MERCHANT_STATISTICS: "/pages/merchant/statistics/statistics",
 };
 
 /**

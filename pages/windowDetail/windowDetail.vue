@@ -154,12 +154,41 @@
       <text>未找到窗口信息或加载失败</text>
     </view>
 
-    <!-- Floating Action Button -->
-    <view v-if="window" class="fab-container">
-      <button class="fab-button" @click="toggleQuickComment">
+    <!-- Floating Action Buttons -->
+    <view v-if="windowId" class="fab-container">
+      <!-- Favorite Button -->
+      <button
+        class="fab-button fab-favorite"
+        :class="{ favorited: isFavorited }"
+        @click="toggleFavorite"
+        :loading="isFavoriteLoading"
+      >
+        <uni-icons
+          :type="isFavorited ? 'heart-filled' : 'heart'"
+          :color="isFavorited ? '#ff4757' : '#fff'"
+          size="24"
+        />
+      </button>
+
+      <!-- Comment Button -->
+      <button class="fab-button fab-comment" @click="toggleQuickComment">
         <uni-icons type="chatboxes" color="#fff" size="24" />
       </button>
+
+      <!-- Report Button -->
+      <button class="fab-button fab-report" @click="openWindowReportModal">
+        <uni-icons type="flag" color="#fff" size="24" />
+      </button>
     </view>
+
+    <!-- 举报弹窗 -->
+    <ReportModal
+      ref="windowReportModal"
+      content-type="window"
+      :content-id="windowId"
+      :target-name="window?.windowName"
+      @success="handleReportSuccess"
+    />
 
     <!-- Quick Comment Panel -->
     <view
@@ -259,9 +288,17 @@
 <script setup>
 import { ref, computed } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import { getWindowDetail, submitComment, uploadFile } from "@/services/api.js";
+import {
+  getWindowDetail,
+  submitComment,
+  uploadFile,
+  checkFavoriteStatus,
+  addFavorite,
+  removeFavorite,
+} from "@/services/api.js";
 import DishCard from "@/components/DishCard.vue";
 import CommentCard from "@/components/CommentCard.vue";
+import ReportModal from "@/components/ReportModal.vue";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 import { navigateTo, RoutePath } from "@/utils/router.js";
 
@@ -275,6 +312,14 @@ const showQuickComment = ref(false);
 const quickRating = ref(0);
 const quickCommentText = ref("");
 const isSubmittingQuick = ref(false);
+
+// 收藏相关状态
+const isFavorited = ref(false);
+const favoriteId = ref(null);
+const isFavoriteLoading = ref(false);
+
+// 举报相关状态
+const windowReportModal = ref();
 
 // 不再需要商家权限检查，所有用户都可以回复评论
 // const isCurrentUserMerchant = computed(() => {
@@ -335,19 +380,28 @@ const fetchWindowDetails = async () => {
     // merchant, announcement, and tags within dishes.
     // No more mocking is needed.
 
-    // Separate official replies from user comments for proper display
+    // Process comments and replies for proper hierarchical display
     if (data.comments && Array.isArray(data.comments)) {
-      const userComments = data.comments.filter((c) => !c.isOfficialReply);
-      const replies = data.comments.filter((c) => c.isOfficialReply);
+      const userComments = data.comments.filter((c) => !c.parentId); // Top-level comments
+      const allReplies = data.comments.filter((c) => c.parentId); // All replies
 
       userComments.forEach((comment) => {
-        comment.reply = replies.find((r) => r.parentId === comment.commentId);
+        // Find all replies to this comment
+        comment.replies = allReplies.filter(
+          (r) => r.parentId === comment.commentId
+        );
+
+        // Legacy support: keep the old 'reply' property for official replies
+        comment.reply = comment.replies.find((r) => r.isOfficialReply);
       });
 
       data.comments = userComments;
     }
 
     window.value = data;
+
+    // 获取收藏状态
+    await checkFavoriteStatusForWindow();
   } catch (error) {
     console.error("Failed to fetch window details:", error);
     uni.showToast({
@@ -379,6 +433,55 @@ const windowComments = computed(() => {
     return false;
   });
 });
+
+// 收藏相关函数
+const checkFavoriteStatusForWindow = async () => {
+  try {
+    const result = await checkFavoriteStatus("window", windowId.value);
+    isFavorited.value = result.isFavorited;
+    favoriteId.value = result.favoriteId;
+  } catch (error) {
+    console.error("Failed to check favorite status:", error);
+  }
+};
+
+const toggleFavorite = async () => {
+  if (isFavoriteLoading.value) return;
+
+  try {
+    isFavoriteLoading.value = true;
+
+    if (isFavorited.value) {
+      // 取消收藏
+      await removeFavorite(favoriteId.value);
+      isFavorited.value = false;
+      favoriteId.value = null;
+      uni.showToast({
+        title: "已取消收藏",
+        icon: "success",
+      });
+    } else {
+      // 添加收藏
+      const result = await addFavorite({
+        targetType: "window",
+        targetId: windowId.value,
+      });
+      isFavorited.value = true;
+      favoriteId.value = result.favoriteId;
+      uni.showToast({
+        title: "收藏成功",
+        icon: "success",
+      });
+    }
+  } catch (error) {
+    uni.showToast({
+      title: error.message || "操作失败",
+      icon: "none",
+    });
+  } finally {
+    isFavoriteLoading.value = false;
+  }
+};
 
 // Quick comment functions
 const toggleQuickComment = () => {
@@ -508,6 +611,19 @@ const goToComment = () => {
   navigateTo(RoutePath.COMMENT, {
     targetType: "window",
     targetId: windowId.value,
+  });
+};
+
+// 举报相关方法
+const openWindowReportModal = () => {
+  windowReportModal.value?.openModal();
+};
+
+const handleReportSuccess = () => {
+  uni.showToast({
+    title: "举报提交成功，我们会尽快处理",
+    icon: "success",
+    duration: 2000,
   });
 };
 </script>
@@ -745,22 +861,50 @@ const goToComment = () => {
   bottom: 60rpx;
   right: 30rpx;
   z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
 .fab-button {
   width: 120rpx;
   height: 120rpx;
   border-radius: 60rpx;
-  background-color: #2563eb;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
 .fab-button::after {
   border: none;
+}
+
+.fab-comment {
+  background-color: #2563eb;
+  box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
+}
+
+.fab-favorite {
+  background-color: #6b7280;
+  box-shadow: 0 8rpx 16rpx rgba(107, 114, 128, 0.3);
+}
+
+.fab-favorite.favorited {
+  background-color: #fff;
+  box-shadow: 0 8rpx 16rpx rgba(255, 71, 87, 0.3);
+  border: 2rpx solid #ff4757;
+}
+
+.fab-button:active {
+  transform: scale(0.95);
+}
+
+.fab-report {
+  background-color: #ff6b6b;
+  box-shadow: 0 8rpx 16rpx rgba(255, 107, 107, 0.3);
 }
 
 /* Quick Comment Panel Styles */

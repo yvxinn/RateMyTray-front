@@ -291,10 +291,10 @@ export function getTags() {
 // =====================================================================================
 
 /**
- * 获取用户的通知列表 (分页)
- * @param {object} params - { page, size }
+ * 获取用户的通知列表
+ * @param {object} params - 可选参数
  */
-export function getNotifications(params) {
+export function getNotifications(params = {}) {
   return request({
     url: "/notifications",
     method: "get",
@@ -310,5 +310,82 @@ export function markNotificationAsRead(notificationId) {
   return request({
     url: `/notifications/${notificationId}/read`,
     method: "post",
+  });
+}
+
+// =====================================================================================
+// 举报模块 (reports)
+// =====================================================================================
+
+/**
+ * 用户举报不良信息
+ * @param {object} data - { reportedContentType, reportedContentId, reportReason }
+ */
+export function submitReport(data) {
+  return request({
+    url: "/reports",
+    method: "post",
+    data,
+  });
+}
+
+// =====================================================================================
+// 收藏模块 (favorites)
+// =====================================================================================
+
+/**
+ * 获取用户收藏列表
+ * @param {object} params - { targetType? }
+ */
+export function getFavorites(params = {}) {
+  return request({
+    url: "/favorites",
+    method: "get",
+    params,
+  });
+}
+
+/**
+ * 用户收藏窗口或菜品
+ * @param {object} data - { targetType, targetId }
+ */
+export function addFavorite(data) {
+  return request({
+    url: "/favorites",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 用户取消收藏
+ * @param {number} favoriteId
+ */
+export function removeFavorite(favoriteId) {
+  return request({
+    url: `/favorites/${favoriteId}`,
+    method: "delete",
+  });
+}
+
+/**
+ * 检查是否已收藏（根据 targetType 和 targetId）
+ * @param {string} targetType - 'window' 或 'dish'
+ * @param {number} targetId
+ */
+export function checkFavoriteStatus(targetType, targetId) {
+  return request({
+    url: "/favorites",
+    method: "get",
+    params: { targetType },
+  }).then((response) => {
+    const favorites = response || [];
+    const existingFavorite = favorites.find(
+      (item) => item.targetType === targetType && item.targetId === targetId
+    );
+    return {
+      isFavorited: !!existingFavorite,
+      favoriteId: existingFavorite?.favoriteId || null,
+    };
   });
 }

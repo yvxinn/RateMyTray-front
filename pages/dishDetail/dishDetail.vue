@@ -129,11 +129,133 @@
       <text>未找到菜品信息或加载失败</text>
     </view>
 
-    <!-- Floating Action Button -->
+    <!-- Floating Action Buttons -->
     <view v-if="dish" class="fab-container">
-      <button class="fab-button" @click="goToComment">
+      <!-- Favorite Button -->
+      <button
+        class="fab-button fab-favorite"
+        :class="{ favorited: isFavorited }"
+        @click="toggleFavorite"
+        :loading="isFavoriteLoading"
+      >
+        <uni-icons
+          :type="isFavorited ? 'heart-filled' : 'heart'"
+          :color="isFavorited ? '#ff4757' : '#fff'"
+          size="24"
+        />
+      </button>
+
+      <!-- Comment Button -->
+      <button class="fab-button fab-comment" @click="toggleQuickComment">
         <uni-icons type="chatboxes" color="#fff" size="24" />
       </button>
+
+      <!-- Report Button -->
+      <button class="fab-button fab-report" @click="openDishReportModal">
+        <uni-icons type="flag" color="#fff" size="24" />
+      </button>
+    </view>
+
+    <!-- 举报弹窗 -->
+    <ReportModal
+      ref="dishReportModal"
+      content-type="dish"
+      :content-id="dishId"
+      :target-name="dish?.name"
+      @success="handleReportSuccess"
+    />
+
+    <!-- Quick Comment Panel -->
+    <view
+      v-if="showQuickComment"
+      class="quick-comment-overlay"
+      @click="cancelQuickComment"
+    >
+      <view class="quick-comment-panel" @click.stop>
+        <view class="quick-comment-header">
+          <text class="quick-comment-title">快速评价</text>
+          <uni-icons
+            type="closeempty"
+            size="20"
+            color="#999"
+            @click="cancelQuickComment"
+          />
+        </view>
+
+        <view class="rating-section">
+          <text class="rating-label">评分：</text>
+          <uni-rate
+            v-model="quickRating"
+            :value="quickRating"
+            size="20"
+            :max="5"
+            :disabled="false"
+            @change="onRatingChange"
+          />
+          <text class="rating-score">{{ quickRating }}.0</text>
+        </view>
+
+        <textarea
+          class="quick-comment-textarea"
+          v-model="quickCommentText"
+          placeholder="分享您对这道菜的评价..."
+          maxlength="500"
+          :auto-height="true"
+        />
+
+        <!-- Image Upload Section -->
+        <view class="image-upload-section">
+          <view class="image-gallery" v-if="selectedImages.length > 0">
+            <view
+              v-for="(image, index) in selectedImages"
+              :key="index"
+              class="image-item"
+            >
+              <image
+                :src="image.tempPath"
+                class="preview-image"
+                mode="aspectFill"
+              />
+              <view class="image-overlay">
+                <uni-icons
+                  type="close"
+                  size="16"
+                  color="#fff"
+                  @click="removeImage(index)"
+                />
+              </view>
+              <view v-if="image.uploading" class="upload-progress">
+                <text class="upload-text">上传中...</text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            class="add-image-btn"
+            @click="selectImages"
+            v-if="selectedImages.length < 3"
+          >
+            <uni-icons type="camera" size="20" color="#999" />
+            <text class="add-image-text"
+              >添加图片 ({{ selectedImages.length }}/3)</text
+            >
+          </view>
+        </view>
+
+        <view class="quick-comment-actions">
+          <view class="char-count">{{ quickCommentText.length }}/500</view>
+          <view class="action-buttons">
+            <button class="cancel-btn" @click="cancelQuickComment">取消</button>
+            <button
+              class="submit-btn"
+              @click="submitQuickComment"
+              :disabled="!quickRating || isSubmittingQuick"
+            >
+              {{ isSubmittingQuick ? "提交中..." : "发布评价" }}
+            </button>
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -141,8 +263,16 @@
 <script setup>
 import { ref, computed } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
-import { getDishDetail } from "@/services/api.js";
+import {
+  getDishDetail,
+  checkFavoriteStatus,
+  addFavorite,
+  removeFavorite,
+  submitComment,
+  uploadFile,
+} from "@/services/api.js";
 import CommentCard from "@/components/CommentCard.vue";
+import ReportModal from "@/components/ReportModal.vue";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 import { navigateTo, RoutePath } from "@/utils/router.js";
 
@@ -150,6 +280,21 @@ const dishId = ref(null);
 const dish = ref(null);
 const isLoading = ref(true);
 const currentTab = ref(0); // 0 for comments
+
+// 收藏相关状态
+const isFavorited = ref(false);
+const favoriteId = ref(null);
+const isFavoriteLoading = ref(false);
+
+// 举报相关状态
+const dishReportModal = ref();
+
+// Quick comment functionality
+const showQuickComment = ref(false);
+const quickRating = ref(0);
+const quickCommentText = ref("");
+const isSubmittingQuick = ref(false);
+const selectedImages = ref([]);
 
 // 不再需要商家权限检查，所有用户都可以回复评论
 // const isCurrentUserMerchant = computed(() => {
@@ -193,20 +338,28 @@ const fetchDishDetails = async () => {
     console.log("Dish Detail API Response:", data);
     console.log("Comments in response:", data.comments);
 
-    // Process comments if they exist
+    // Process comments and replies for proper hierarchical display
     if (data.comments && Array.isArray(data.comments)) {
-      // 由于菜品详情API返回的评论都是针对该菜品的，所以不需要过滤 targetType
-      const userComments = data.comments.filter((c) => !c.isOfficialReply);
-      const replies = data.comments.filter((c) => c.isOfficialReply);
+      const userComments = data.comments.filter((c) => !c.parentId); // Top-level comments
+      const allReplies = data.comments.filter((c) => c.parentId); // All replies
 
       userComments.forEach((comment) => {
-        comment.reply = replies.find((r) => r.parentId === comment.commentId);
+        // Find all replies to this comment
+        comment.replies = allReplies.filter(
+          (r) => r.parentId === comment.commentId
+        );
+
+        // Legacy support: keep the old 'reply' property for official replies
+        comment.reply = comment.replies.find((r) => r.isOfficialReply);
       });
 
       data.comments = userComments;
     }
 
     dish.value = data;
+
+    // 获取收藏状态
+    await checkFavoriteStatusForDish();
   } catch (error) {
     console.error("Failed to fetch dish details:", error);
     uni.showToast({
@@ -218,10 +371,190 @@ const fetchDishDetails = async () => {
   }
 };
 
-const goToComment = () => {
-  navigateTo(RoutePath.COMMENT, {
-    targetType: "dish",
-    targetId: dishId.value,
+// 检查收藏状态
+const checkFavoriteStatusForDish = async () => {
+  try {
+    const result = await checkFavoriteStatus("dish", dishId.value);
+    isFavorited.value = result.isFavorited;
+    favoriteId.value = result.favoriteId;
+  } catch (error) {
+    console.error("Failed to check favorite status:", error);
+  }
+};
+
+// 切换收藏状态
+const toggleFavorite = async () => {
+  if (isFavoriteLoading.value) return;
+
+  try {
+    isFavoriteLoading.value = true;
+
+    if (isFavorited.value) {
+      // 取消收藏
+      await removeFavorite(favoriteId.value);
+      isFavorited.value = false;
+      favoriteId.value = null;
+      uni.showToast({
+        title: "已取消收藏",
+        icon: "success",
+      });
+    } else {
+      // 添加收藏
+      const result = await addFavorite({
+        targetType: "dish",
+        targetId: dishId.value,
+      });
+      isFavorited.value = true;
+      favoriteId.value = result.favoriteId;
+      uni.showToast({
+        title: "收藏成功",
+        icon: "success",
+      });
+    }
+  } catch (error) {
+    uni.showToast({
+      title: error.message || "操作失败",
+      icon: "none",
+    });
+  } finally {
+    isFavoriteLoading.value = false;
+  }
+};
+
+// Quick comment functions
+const toggleQuickComment = () => {
+  showQuickComment.value = !showQuickComment.value;
+  if (!showQuickComment.value) {
+    resetQuickCommentForm();
+  }
+};
+
+const cancelQuickComment = () => {
+  showQuickComment.value = false;
+  resetQuickCommentForm();
+};
+
+const resetQuickCommentForm = () => {
+  quickRating.value = 0;
+  quickCommentText.value = "";
+  selectedImages.value = [];
+};
+
+const onRatingChange = (event) => {
+  quickRating.value = event.value;
+};
+
+const selectImages = () => {
+  uni.chooseImage({
+    count: 3 - selectedImages.value.length,
+    sizeType: ["compressed"],
+    sourceType: ["album", "camera"],
+    success: (res) => {
+      const newImages = res.tempFilePaths.map((path) => ({
+        tempPath: path,
+        url: "",
+        uploading: false,
+      }));
+      selectedImages.value = [...selectedImages.value, ...newImages];
+      uploadImages(newImages);
+    },
+    fail: (error) => {
+      console.error("选择图片失败:", error);
+      uni.showToast({
+        title: "选择图片失败",
+        icon: "none",
+      });
+    },
+  });
+};
+
+const uploadImages = async (images) => {
+  for (const image of images) {
+    try {
+      image.uploading = true;
+      const result = await uploadFile(image.tempPath);
+      image.url = result.url;
+      image.uploading = false;
+    } catch (error) {
+      console.error("图片上传失败:", error);
+      image.uploading = false;
+      uni.showToast({
+        title: "图片上传失败",
+        icon: "none",
+      });
+    }
+  }
+};
+
+const removeImage = (index) => {
+  selectedImages.value.splice(index, 1);
+};
+
+const submitQuickComment = async () => {
+  if (isSubmittingQuick.value) return;
+
+  if (quickRating.value === 0) {
+    uni.showToast({
+      title: "请选择评分",
+      icon: "none",
+    });
+    return;
+  }
+
+  if (!quickCommentText.value.trim() && selectedImages.value.length === 0) {
+    uni.showToast({
+      title: "请输入评价内容或添加图片",
+      icon: "none",
+    });
+    return;
+  }
+
+  isSubmittingQuick.value = true;
+
+  try {
+    const uploadedImages = selectedImages.value.filter((img) => img.url);
+
+    await submitComment({
+      targetType: "dish",
+      targetId: dishId.value,
+      rating: quickRating.value,
+      content: quickCommentText.value.trim(),
+      imageUrls: uploadedImages.map((img) => img.url),
+      isAnonymous: false,
+    });
+
+    uni.showToast({
+      title: "评价提交成功",
+      icon: "success",
+    });
+
+    // Hide quick comment panel and reset form
+    showQuickComment.value = false;
+    resetQuickCommentForm();
+
+    // Refresh dish details to show new comment
+    await fetchDishDetails();
+  } catch (error) {
+    console.error("提交评价失败:", error);
+    uni.showToast({
+      title: error.message || "提交失败，请重试",
+      icon: "none",
+    });
+  } finally {
+    isSubmittingQuick.value = false;
+  }
+};
+
+// 举报相关方法
+const openDishReportModal = () => {
+  dishReportModal.value?.openModal();
+};
+
+const handleReportSuccess = () => {
+  uni.showToast({
+    title: "举报提交成功，我们会尽快处理",
+    icon: "success",
+    duration: 2000,
   });
 };
 </script>
@@ -405,22 +738,50 @@ const goToComment = () => {
   bottom: 60rpx;
   right: 30rpx;
   z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
 .fab-button {
   width: 120rpx;
   height: 120rpx;
   border-radius: 60rpx;
-  background-color: #2563eb;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
 .fab-button::after {
   border: none;
+}
+
+.fab-comment {
+  background-color: #2563eb;
+  box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
+}
+
+.fab-favorite {
+  background-color: #6b7280;
+  box-shadow: 0 8rpx 16rpx rgba(107, 114, 128, 0.3);
+}
+
+.fab-favorite.favorited {
+  background-color: #fff;
+  box-shadow: 0 8rpx 16rpx rgba(255, 71, 87, 0.3);
+  border: 2rpx solid #ff4757;
+}
+
+.fab-button:active {
+  transform: scale(0.95);
+}
+
+.fab-report {
+  background-color: #ff6b6b;
+  box-shadow: 0 8rpx 16rpx rgba(255, 107, 107, 0.3);
 }
 
 /* Desktop responsive styles */
@@ -514,5 +875,199 @@ const goToComment = () => {
   100% {
     opacity: 0.5;
   }
+}
+
+/* Quick Comment Panel Styles */
+.quick-comment-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.quick-comment-panel {
+  background: #fff;
+  border-radius: 24rpx;
+  width: 100%;
+  max-width: 600rpx;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.15);
+}
+
+.quick-comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.quick-comment-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.rating-section {
+  padding: 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.rating-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.rating-score {
+  font-size: 24rpx;
+  color: #f59e0b;
+  font-weight: 600;
+  margin-left: 8rpx;
+}
+
+.quick-comment-textarea {
+  margin: 32rpx;
+  min-height: 120rpx;
+  padding: 20rpx;
+  border: 2rpx solid #f0f0f0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #333;
+  background: #fafafa;
+  width: calc(100% - 64rpx);
+  box-sizing: border-box;
+}
+
+.quick-comment-textarea:focus {
+  border-color: #ff9500;
+  background: #fff;
+}
+
+.image-upload-section {
+  padding: 0 32rpx 32rpx;
+}
+
+.image-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  width: 32rpx;
+  height: 32rpx;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-text {
+  color: #fff;
+  font-size: 22rpx;
+}
+
+.add-image-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 120rpx;
+  height: 120rpx;
+  border: 2rpx dashed #ddd;
+  border-radius: 12rpx;
+  gap: 8rpx;
+  background: #fafafa;
+}
+
+.add-image-text {
+  font-size: 22rpx;
+  color: #999;
+  text-align: center;
+}
+
+.quick-comment-actions {
+  padding: 24rpx 32rpx;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-count {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 16rpx;
+}
+
+.cancel-btn,
+.submit-btn {
+  padding: 16rpx 32rpx;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  border: none;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.submit-btn {
+  background: #ff9500;
+  color: #fff;
+}
+
+.submit-btn:disabled {
+  background: #ccc;
+  color: #999;
 }
 </style>

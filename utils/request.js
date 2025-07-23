@@ -14,21 +14,52 @@ const request = (options) => {
       options.header.Authorization = `Bearer ${token}`;
     }
 
+    // 处理URL和参数
+    let url = BASE_URL + options.url;
+    let data = options.data || {};
+
+    // 对于GET请求，将 params 参数添加到URL查询字符串中
+    if (options.method === "GET" && options.params) {
+      const queryString = Object.entries(options.params)
+        .filter(
+          ([key, value]) =>
+            value !== undefined && value !== null && value !== ""
+        )
+        .map(
+          ([key, value]) =>
+            `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+        )
+        .join("&");
+      if (queryString) {
+        url += (url.includes("?") ? "&" : "?") + queryString;
+      }
+    }
+
     uni.request({
-      url: BASE_URL + options.url,
+      url,
       method: options.method || "GET",
-      data: options.data || {},
+      data,
       header: options.header || {},
       success: (res) => {
         // 响应拦截器
         if (res.statusCode >= 200 && res.statusCode < 300) {
+          // 处理204 No Content（删除成功）
+          if (res.statusCode === 204) {
+            resolve(null); // 204通常没有响应体
+            return;
+          }
+
           // 成功的响应
           if (
-            res.data.code === ApiCode.SUCCESS ||
-            res.data.code === ApiCode.CREATED ||
-            res.data.code === ApiCode.LEGACY_SUCCESS
+            res.data &&
+            (res.data.code === ApiCode.SUCCESS ||
+              res.data.code === ApiCode.CREATED ||
+              res.data.code === ApiCode.LEGACY_SUCCESS)
           ) {
             resolve(res.data.data);
+          } else if (!res.data) {
+            // 如果没有响应体，但状态码是200-299，认为是成功的
+            resolve(null);
           } else {
             // 业务逻辑错误
             uni.showToast({

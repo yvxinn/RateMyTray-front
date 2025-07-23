@@ -48,25 +48,22 @@
 
     <!-- Grouped Category Tags -->
     <view class="tags-section">
-      <scroll-view class="tags-scroll-view" scroll-x :show-scrollbar="false">
-        <view class="tag-group">
-          <view
-            :class="[
-              'tag-item',
-              'clear-all-tag',
-              activeTags.length === 0 ? 'active' : '',
-            ]"
-            @click="onClearAllTags"
-          >
-            全部 ({{ activeTags.length === 0 ? "已选中" : "清空选择" }})
-          </view>
-        </view>
+      <view class="tags-container">
+        <!-- 全部/清空标签 -->
         <view
-          v-for="(group, category) in groupedTags"
-          :key="category"
-          class="tag-group"
+          :class="[
+            'tag-item',
+            'clear-all-tag',
+            activeTags.length === 0 ? 'active' : '',
+          ]"
+          @click="onClearAllTags"
         >
-          <text class="tag-category-title">{{ category }}</text>
+          全部 ({{ activeTags.length === 0 ? "已选中" : "清空选择" }})
+        </view>
+
+        <!-- 分组标签 -->
+        <template v-for="(group, category) in groupedTags" :key="category">
+          <view class="tag-category-label">{{ category }}</view>
           <view
             v-for="tag in group"
             :key="tag.id"
@@ -81,8 +78,8 @@
               >✓</text
             >
           </view>
-        </view>
-      </scroll-view>
+        </template>
+      </view>
     </view>
 
     <!-- Sorting Options -->
@@ -202,7 +199,7 @@ const isRefreshing = ref(false);
 const hasMore = ref(true);
 const groupedTags = ref({});
 const activeTags = ref([]);
-const unreadCount = ref(5); // 模拟未读消息数量
+// const unreadCount = ref(5); // 模拟未读消息数量
 
 const searchParams = reactive({
   name: "",
@@ -232,7 +229,7 @@ const userAvatarSrc = computed(() => {
   // 从 store 中获取用户头像
   const userInfo = store.state.userInfo;
   return useResolveImagePath(
-    // userInfo?.avatarUrl,
+    userInfo?.avatarUrl,
     "/static/images/default-avatar.png"
   ).value;
 });
@@ -452,8 +449,10 @@ onMounted(() => {
 <style scoped>
 /* Enhanced Navigation Bar */
 .navbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
   background: linear-gradient(135deg, #ff8c00 0%, #ff7a45 100%);
   box-shadow: 0 2rpx 12rpx rgba(255, 140, 0, 0.3);
@@ -560,6 +559,7 @@ onMounted(() => {
   justify-content: center;
   color: white;
   text-align: center;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 .hero-bg {
   position: absolute;
@@ -594,52 +594,65 @@ onMounted(() => {
   padding: 20rpx;
   background-color: #fff;
   border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0; /* 防止被压缩 */
 }
-.tags-scroll-view {
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  align-items: flex-start;
+  max-height: 120rpx; /* 限制最大高度为两行 */
+  overflow: hidden; /* 超出部分隐藏 */
+  line-height: 1;
+}
+
+.tag-category-label {
+  font-size: 22rpx;
+  color: #ff8c00;
+  font-weight: 600;
+  padding: 8rpx 16rpx;
+  background: rgba(255, 140, 0, 0.1);
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(255, 140, 0, 0.2);
   white-space: nowrap;
-}
-.tag-group {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 30rpx;
-}
-.tag-category-title {
-  font-size: 28rpx;
-  color: #999;
-  font-weight: bold;
-  margin-right: 15rpx;
 }
 .tag-item {
   display: inline-flex;
   align-items: center;
-  padding: 12rpx 28rpx;
-  margin-right: 20rpx;
-  border-radius: 30rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
   background-color: #f3f4f6;
   color: #4b5563;
-  font-size: 28rpx;
-  transition: all 0.2s;
+  font-size: 24rpx;
+  font-weight: 500;
+  transition: all 0.3s;
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 .tag-item.active {
   background-color: #ff7a45;
   color: white;
-  font-weight: bold;
+  font-weight: 600;
   box-shadow: 0 2rpx 8rpx rgba(255, 122, 69, 0.3);
 }
-.tag-item:hover {
-  transform: translateY(-2rpx);
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+.tag-item:active {
+  transform: scale(0.98);
 }
 .clear-all-tag {
   background-color: #e5e7eb !important;
   color: #374151 !important;
   font-weight: 600;
+  border: 1rpx solid #d1d5db;
+  order: -1; /* 确保始终在最前面 */
 }
 .clear-all-tag.active {
   background-color: #10b981 !important;
   color: white !important;
+  border-color: #10b981;
+  box-shadow: 0 2rpx 8rpx rgba(16, 185, 129, 0.3);
 }
 .tag-check {
   margin-left: 8rpx;
@@ -654,6 +667,7 @@ onMounted(() => {
   background-color: #f7f8fa;
   gap: 20rpx;
   align-items: center;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 .sort-option {
   padding: 10rpx 24rpx;
@@ -676,10 +690,15 @@ onMounted(() => {
   flex-direction: column;
   height: 100vh;
   background-color: #f7f8fa;
+  overflow: hidden; /* 防止主容器滚动 */
+  padding-top: calc(
+    88rpx + var(--status-bar-height, 0)
+  ); /* 为固定导航栏留出空间 */
 }
 
 .window-list-scroll {
-  height: calc(100vh - 480rpx); /* 调整高度以适应新的导航栏 */
+  flex: 1; /* 占用剩余空间 */
+  height: 0; /* 配合flex:1使用 */
 }
 
 /* Window List Grid (retained from previous) */

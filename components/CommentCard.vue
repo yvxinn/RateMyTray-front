@@ -53,25 +53,34 @@
 
     <!-- Interaction Bar -->
     <view class="interaction-bar">
-      <view
-        class="like-section"
-        :class="{ liked: isLiked }"
-        @click="handleLike"
-      >
-        <uni-icons
-          :type="isLiked ? 'heart-filled' : 'heart'"
-          size="18"
-          :color="isLiked ? '#ff6b6b' : '#999'"
-        />
-        <text class="like-count">{{ currentLikeCount }}</text>
+      <view class="interaction-left">
+        <view
+          class="like-section"
+          :class="{ liked: isLiked }"
+          @click="handleLike"
+        >
+          <uni-icons
+            :type="isLiked ? 'heart-filled' : 'heart'"
+            size="18"
+            :color="isLiked ? '#ff6b6b' : '#999'"
+          />
+          <text class="like-count">{{ currentLikeCount }}</text>
+        </view>
+        <view
+          class="reply-btn"
+          v-if="!comment.reply && canReply"
+          @click="toggleReply"
+        >
+          <uni-icons type="chatbubble" size="16" color="#666" />
+          <text class="reply-text">回复</text>
+        </view>
       </view>
-      <view
-        class="reply-btn"
-        v-if="!comment.reply && canReply"
-        @click="toggleReply"
-      >
-        <uni-icons type="chatbubble" size="16" color="#666" />
-        <text class="reply-text">回复</text>
+
+      <view class="interaction-right">
+        <view class="report-btn" @click="openReportModal">
+          <uni-icons type="flag" size="16" color="#999" />
+          <text class="report-text">举报</text>
+        </view>
       </view>
     </view>
 
@@ -99,8 +108,44 @@
       </view>
     </view>
 
-    <!-- Official Reply Block -->
-    <view v-if="comment.reply" class="official-reply">
+    <!-- Replies Section -->
+    <view
+      v-if="comment.replies && comment.replies.length > 0"
+      class="replies-section"
+    >
+      <view
+        v-for="reply in comment.replies"
+        :key="reply.commentId || reply.replyId"
+        class="reply-item"
+        :class="{ 'official-reply': reply.isOfficialReply }"
+      >
+        <view class="reply-header">
+          <view class="reply-user-info">
+            <image
+              class="reply-avatar"
+              :src="resolveReplyAvatar(reply)"
+              mode="aspectFill"
+            />
+            <text class="reply-user-name">{{
+              reply.reviewerName || reply.replyerName || "匿名用户"
+            }}</text>
+            <view v-if="reply.isOfficialReply" class="official-badge">
+              <uni-icons type="service" size="12" color="#fff" />
+              <text class="badge-text">商家</text>
+            </view>
+          </view>
+          <text class="reply-time">{{
+            formatReplyTime(reply.commentTime || reply.replyTime)
+          }}</text>
+        </view>
+        <text class="reply-content">{{
+          reply.content || reply.replyContent
+        }}</text>
+      </view>
+    </view>
+
+    <!-- Legacy Official Reply Block (for backward compatibility) -->
+    <view v-else-if="comment.reply" class="official-reply">
       <view class="reply-header">
         <uni-icons type="service" size="16" color="#3b82f6" />
         <text class="reply-badge">商家回复</text>
@@ -110,6 +155,15 @@
       </view>
       <text class="reply-text">{{ comment.reply.content }}</text>
     </view>
+
+    <!-- 举报弹窗 -->
+    <ReportModal
+      ref="reportModal"
+      content-type="comment"
+      :content-id="comment.commentId"
+      :target-name="getCommentPreview()"
+      @success="handleReportSuccess"
+    />
   </view>
 </template>
 
@@ -118,6 +172,7 @@ import { computed, toRefs, ref } from "vue";
 import { BACKEND_URL } from "@/utils/config.js";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 import { likeComment, replyComment } from "@/services/api.js";
+import ReportModal from "@/components/ReportModal.vue";
 
 const props = defineProps({
   comment: {
@@ -144,6 +199,7 @@ const currentLikeCount = ref(computed(() => comment.value.helpful_count || 0));
 const showReplyInput = ref(false);
 const replyContent = ref("");
 const isSubmittingReply = ref(false);
+const reportModal = ref();
 
 const avatarSrc = useResolveImagePath(
   computed(() => comment.value.avatar_url),
@@ -307,6 +363,31 @@ const previewImage = (currentIndex) => {
   });
 };
 
+// 举报相关方法
+const openReportModal = () => {
+  reportModal.value?.openModal();
+};
+
+const handleReportSuccess = () => {
+  uni.showToast({
+    title: "举报提交成功，我们会尽快处理",
+    icon: "success",
+    duration: 2000,
+  });
+};
+
+const getCommentPreview = () => {
+  const content = comment.value.content || "";
+  return content.length > 20 ? content.substring(0, 20) + "..." : content;
+};
+
+const resolveReplyAvatar = (reply) => {
+  return useResolveImagePath(
+    reply.avatar_url || reply.avatarUrl,
+    "/static/images/default-avatar.png"
+  ).value;
+};
+
 const resolveImagePath = (url) => {
   return useResolveImagePath(url).value;
 };
@@ -437,6 +518,17 @@ const resolveImagePath = (url) => {
   border-top: 1px solid #f5f5f5;
 }
 
+.interaction-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.interaction-right {
+  display: flex;
+  align-items: center;
+}
+
 .like-section {
   display: flex;
   align-items: center;
@@ -482,6 +574,27 @@ const resolveImagePath = (url) => {
 }
 
 .reply-text {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.report-btn {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.report-btn:active {
+  background-color: #fef2f2;
+  transform: scale(0.98);
+}
+
+.report-text {
   font-size: 24rpx;
   color: #666;
 }
@@ -549,6 +662,75 @@ const resolveImagePath = (url) => {
   cursor: not-allowed;
 }
 
+/* Replies Section Styles */
+.replies-section {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: #f8f9fa;
+  border-radius: 12rpx;
+  border-left: 3rpx solid #e2e8f0;
+}
+
+.reply-item {
+  padding: 16rpx;
+  margin-bottom: 12rpx;
+  background: #fff;
+  border-radius: 8rpx;
+  border: 1rpx solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.reply-item:last-child {
+  margin-bottom: 0;
+}
+
+.reply-item.official-reply {
+  background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+  border-color: #3b82f6;
+  border-left: 3rpx solid #3b82f6;
+}
+
+.reply-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.reply-avatar {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+}
+
+.reply-user-name {
+  font-size: 24rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.official-badge {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 2rpx 8rpx;
+  background: #3b82f6;
+  border-radius: 12rpx;
+}
+
+.badge-text {
+  font-size: 20rpx;
+  color: #fff;
+  font-weight: 500;
+}
+
+.reply-content {
+  font-size: 26rpx;
+  color: #555;
+  line-height: 1.4;
+}
+
+/* Legacy Official Reply Styles (for backward compatibility) */
 .official-reply {
   background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
   padding: 20rpx;
@@ -562,6 +744,7 @@ const resolveImagePath = (url) => {
   align-items: center;
   margin-bottom: 12rpx;
   gap: 8rpx;
+  justify-content: space-between;
 }
 
 .reply-badge {
@@ -573,7 +756,6 @@ const resolveImagePath = (url) => {
 .reply-time {
   font-size: 20rpx;
   color: #6b7280;
-  margin-left: auto;
 }
 
 .official-reply .reply-text {

@@ -3,7 +3,7 @@
     {
       "path": "pages/login/login",
       "style": {
-        "navigationBarTitleText": "用户登录"
+        "navigationStyle": "custom"
       }
     },
     {
@@ -27,7 +27,7 @@
     {
       "path": "pages/register/register",
       "style": {
-        "navigationBarTitleText": "用户注册"
+        "navigationStyle": "custom"
       }
     },
     {

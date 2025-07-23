@@ -605,3 +605,117 @@ servers:
 security: []
 
 ```
+# 修改个人信息
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/users/{userId}:
+    put:
+      summary: 修改个人信息
+      deprecated: false
+      description: ''
+      tags:
+        - 用户管理模块
+      parameters:
+        - name: userId
+          in: path
+          description: ''
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                avatarUrl:
+                  description: 可选
+                  type: string
+                contactInfo:
+                  description: 可选
+                  type: string
+                oldPassword:
+                  description: 修改密码时必需
+                  type: string
+                newPassword:
+                  description: 修改密码时必需
+                  type: string
+                nickname:
+                  type: string
+              x-apifox-orders:
+                - avatarUrl
+                - contactInfo
+                - oldPassword
+                - newPassword
+                - nickname
+            example: "{\r\n    \"avatarUrl\": \"http://localhost:8080/images/avatars/default.png\", // 可选\r\n    \"contactInfo\": \"new_email@example.com\", // 可选\r\n    \"oldPassword\": \"old_password_md5\", // 修改密码时必需\r\n    \"newPassword\": \"new_secure_password_md5\" // 修改密码时必需\r\n}"
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                required:
+                  - code
+                  - message
+                x-apifox-orders:
+                  - code
+                  - message
+              example:
+                code: 200
+                message: 用户信息更新成功
+          headers: {}
+          x-apifox-name: 成功
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                required:
+                  - code
+                  - message
+                x-apifox-orders:
+                  - code
+                  - message
+              example:
+                code: 400
+                message: 旧密码不正确或数据格式错误
+          headers: {}
+          x-apifox-name: 请求有误
+      security:
+        - bearer: []
+      x-apifox-folder: 用户管理模块
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/6807520/apis/api-325117651-run
+components:
+  schemas: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+security: []
+
+```

@@ -2,14 +2,14 @@
   <view class="profile-container">
     <!-- User Info Header -->
     <view class="profile-header">
-      <view class="avatar-wrapper" @click="changeAvatar">
+      <view class="avatar-wrapper">
         <image class="avatar" :src="avatarSrc" mode="aspectFill" />
-        <view class="avatar-edit-badge">
-          <uni-icons type="camera-filled" color="#fff" size="16"></uni-icons>
-        </view>
       </view>
-      <text class="username">{{ userInfo.username }}</text>
+      <text class="username">{{ userInfo.nickname || userInfo.username }}</text>
       <text class="role-badge">{{ roleMap[userInfo.role] || "用户" }}</text>
+      <text v-if="userInfo.contactInfo" class="contact-info">{{
+        userInfo.contactInfo
+      }}</text>
     </view>
 
     <!-- Action List -->
@@ -57,11 +57,10 @@
 <script setup>
 import { computed } from "vue";
 import store from "@/store";
-import { uploadFile, updateUserInfo } from "@/services/api.js";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 import { navigateTo, RoutePath } from "@/utils/router.js";
 
-const userInfo = computed(() => store.state.user || {});
+const userInfo = computed(() => store.state.userInfo || {});
 
 const avatarSrc = useResolveImagePath(
   computed(() => userInfo.value.avatarUrl),
@@ -72,41 +71,6 @@ const roleMap = {
   student: "学生",
   merchant: "商家",
   admin: "管理员",
-};
-
-const changeAvatar = () => {
-  uni.chooseImage({
-    count: 1,
-    sizeType: ["compressed"],
-    sourceType: ["album", "camera"],
-    success: async (res) => {
-      const tempFilePath = res.tempFilePaths[0];
-      uni.showLoading({
-        title: "上传中...",
-      });
-
-      try {
-        const uploadRes = await uploadFile("avatars", tempFilePath);
-        await updateUserInfo(userInfo.value.userId, {
-          avatarUrl: uploadRes.fileUrl,
-        });
-        const newUserInfo = { ...userInfo.value, avatarUrl: uploadRes.fileUrl };
-        store.commit("setUser", newUserInfo);
-        uni.showToast({
-          title: "头像更新成功",
-          icon: "success",
-        });
-      } catch (error) {
-        console.error("Avatar change failed:", error);
-        uni.showToast({
-          title: "头像更新失败",
-          icon: "none",
-        });
-      } finally {
-        uni.hideLoading();
-      }
-    },
-  });
 };
 
 const confirmLogout = () => {
@@ -163,20 +127,6 @@ const goToMerchantWindowManage = () => {
   border: 4rpx solid rgba(255, 255, 255, 0.5);
 }
 
-.avatar-edit-badge {
-  position: absolute;
-  bottom: 5rpx;
-  right: 5rpx;
-  background-color: #ff7a45;
-  border-radius: 50%;
-  width: 50rpx;
-  height: 50rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2rpx solid white;
-}
-
 .username {
   font-size: 42rpx;
   font-weight: 600;
@@ -188,6 +138,12 @@ const goToMerchantWindowManage = () => {
   background-color: rgba(255, 255, 255, 0.2);
   padding: 6rpx 20rpx;
   border-radius: 30rpx;
+}
+
+.contact-info {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 10rpx;
 }
 
 .action-list {

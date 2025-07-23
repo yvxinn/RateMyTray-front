@@ -87,10 +87,10 @@ export function getUserInfo(userId) {
 
 /**
  * 修改个人信息
- * @param {number} userId
- * @param {object} data
+ * @param {string} userId - 用户ID
+ * @param {object} data - { nickname?, avatarUrl?, contactInfo?, oldPassword?, newPassword? }
  */
-export function updateUserInfo(userId, data) {
+export function updateUserProfile(userId, data) {
   return request({
     url: `/users/${userId}`,
     method: "put",

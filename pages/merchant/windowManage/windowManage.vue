@@ -93,7 +93,7 @@ const statusIndex = computed(() =>
     : 0
 );
 
-const user = computed(() => store.state.user);
+const user = computed(() => store.state.userInfo);
 
 onShow(() => {
   if (!user.value || user.value.role !== "merchant") {

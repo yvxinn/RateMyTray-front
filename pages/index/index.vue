@@ -194,6 +194,7 @@ import {
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
 import { navigateTo, RoutePath } from "@/utils/router.js";
 import HomeDishCard from "@/components/HomeDishCard.vue";
+import store from "@/store";
 
 const feedItems = ref([]);
 const isLoading = ref(true);
@@ -228,8 +229,12 @@ const resolveWindowImage = (path) =>
 
 // 用户头像处理
 const userAvatarSrc = computed(() => {
-  // 这里可以从 store 中获取用户头像，现在先用默认头像
-  return useResolveImagePath("", "/static/images/default-avatar.png").value;
+  // 从 store 中获取用户头像
+  const userInfo = store.state.userInfo;
+  return useResolveImagePath(
+    // userInfo?.avatarUrl,
+    "/static/images/default-avatar.png"
+  ).value;
 });
 
 // --- Navigation Actions ---
@@ -247,14 +252,8 @@ const handleLogout = () => {
     content: "您确定要退出登录吗？",
     success: (res) => {
       if (res.confirm) {
-        // 清除用户信息和token
-        uni.removeStorageSync("token");
-        uni.removeStorageSync("user");
-
-        // 跳转到登录页面
-        uni.reLaunch({
-          url: RoutePath.LOGIN,
-        });
+        // 使用store的logout action来清除用户信息和token
+        store.dispatch("logout");
 
         uni.showToast({
           title: "已退出登录",

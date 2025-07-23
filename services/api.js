@@ -246,13 +246,27 @@ export function likeComment(commentId) {
 }
 
 /**
- * 商家回复用户评论
+ * 用户回复评论（通用接口）
+ * @param {number} commentId
+ * @param {object} data - { replyContent }
+ */
+export function replyComment(commentId, data) {
+  return request({
+    url: `/comments/${commentId}/reply`,
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 商家回复用户评论（已废弃，使用 replyComment 替代）
+ * @deprecated 请使用 replyComment 函数
  * @param {number} commentId
  * @param {object} data - { replyContent }
  */
 export function merchantReplyComment(commentId, data) {
   return request({
-    url: `/merchant/comments/${commentId}/reply`,
+    url: `/comments/${commentId}/reply`,
     method: "post",
     data,
   });

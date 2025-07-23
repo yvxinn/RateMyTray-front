@@ -1,5 +1,29 @@
 <template>
   <view class="index-container">
+    <!-- Enhanced Navigation Bar -->
+    <view class="navbar">
+      <view class="navbar-content">
+        <view class="navbar-left">
+          <text class="app-title">小众点评</text>
+          <text class="app-subtitle">发现校园美味</text>
+        </view>
+        <view class="navbar-right">
+          <view class="nav-icon-item" @click="goToNotifications">
+            <uni-icons type="notification" size="24" color="#fff" />
+            <view v-if="unreadCount > 0" class="badge">{{
+              unreadCount > 99 ? "99+" : unreadCount
+            }}</view>
+          </view>
+          <view class="nav-icon-item" @click="goToProfile">
+            <image class="user-avatar" :src="userAvatarSrc" mode="aspectFill" />
+          </view>
+          <view class="nav-icon-item nav-text-icon" @click="handleLogout">
+            <text class="logout-icon">❌</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- Hero Section with Background and Search -->
     <view class="hero-section">
       <view class="hero-bg"></view>
@@ -59,6 +83,18 @@
           </view>
         </view>
       </scroll-view>
+    </view>
+
+    <!-- Sorting Options -->
+    <view class="sort-section" v-if="activeTags.length === 0">
+      <view
+        v-for="option in sortOptions"
+        :key="option.key"
+        :class="['sort-option', activeSortKey === option.key ? 'active' : '']"
+        @click="changeSort(option)"
+      >
+        {{ option.label }}
+      </view>
     </view>
 
     <!-- Content Flow -->
@@ -148,7 +184,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, computed } from "vue";
 import {
   getWindows,
   getWindowDetail,
@@ -156,6 +192,7 @@ import {
   getDishesByTags,
 } from "@/services/api.js";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
+import { navigateTo, RoutePath } from "@/utils/router.js";
 import HomeDishCard from "@/components/HomeDishCard.vue";
 
 const feedItems = ref([]);
@@ -164,15 +201,69 @@ const isRefreshing = ref(false);
 const hasMore = ref(true);
 const groupedTags = ref({});
 const activeTags = ref([]);
+const unreadCount = ref(5); // 模拟未读消息数量
 
 const searchParams = reactive({
   name: "",
   page: 1,
   size: 10,
+  sortBy: "averageRating",
+  order: "desc",
 });
+
+const sortOptions = ref([
+  { key: "default", label: "综合排序", sortBy: "averageRating", order: "desc" },
+  { key: "rating", label: "评分最高", sortBy: "averageRating", order: "desc" },
+  {
+    key: "popularity",
+    label: "人气最高",
+    sortBy: "rating_count",
+    order: "desc",
+  },
+]);
+const activeSortKey = ref("default");
 
 const resolveWindowImage = (path) =>
   useResolveImagePath(path, "/static/images/default-cover.png").value;
+
+// 用户头像处理
+const userAvatarSrc = computed(() => {
+  // 这里可以从 store 中获取用户头像，现在先用默认头像
+  return useResolveImagePath("", "/static/images/default-avatar.png").value;
+});
+
+// --- Navigation Actions ---
+const goToNotifications = () => {
+  navigateTo(RoutePath.NOTIFICATIONS);
+};
+
+const goToProfile = () => {
+  navigateTo(RoutePath.PROFILE);
+};
+
+const handleLogout = () => {
+  uni.showModal({
+    title: "确认退出",
+    content: "您确定要退出登录吗？",
+    success: (res) => {
+      if (res.confirm) {
+        // 清除用户信息和token
+        uni.removeStorageSync("token");
+        uni.removeStorageSync("user");
+
+        // 跳转到登录页面
+        uni.reLaunch({
+          url: RoutePath.LOGIN,
+        });
+
+        uni.showToast({
+          title: "已退出登录",
+          icon: "success",
+        });
+      }
+    },
+  });
+};
 
 // --- API & Data Logic ---
 const fetchWindows = async (isLoadMore = false) => {
@@ -185,14 +276,36 @@ const fetchWindows = async (isLoadMore = false) => {
   }
 
   try {
-    const windowRes = await getWindows({
-      ...searchParams,
-      sortBy: "averageRating",
-      order: "desc",
-    });
-    const newWindows = windowRes.windows.map((w) => ({ ...w, type: "window" }));
+    // 移除发送到后端的排序参数，只保留分页和搜索
+    const apiParams = {
+      name: searchParams.name,
+      page: searchParams.page,
+      size: searchParams.size,
+    };
+    const windowRes = await getWindows(apiParams);
 
-    // Logic to interleave dishes, could be simplified or removed if not essential
+    let newWindows = windowRes.windows.map((w) => ({ ...w, type: "window" }));
+
+    // 前端排序窗口
+    const sortKey = searchParams.sortBy;
+    const order = searchParams.order;
+
+    if (sortKey) {
+      newWindows.sort((a, b) => {
+        const valA = a[sortKey];
+        const valB = b[sortKey];
+
+        if (valA < valB) {
+          return order === "asc" ? -1 : 1;
+        }
+        if (valA > valB) {
+          return order === "asc" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    // 获取菜品数据用于交错显示
     const dishPromises = newWindows
       .slice(0, 3)
       .map((w) => getWindowDetail(w.windowId));
@@ -210,6 +323,7 @@ const fetchWindows = async (isLoadMore = false) => {
         : []
     );
 
+    // 交错排列窗口和菜品
     let finalItems = [];
     let dishIndex = 0;
     newWindows.forEach((win, index) => {
@@ -224,6 +338,7 @@ const fetchWindows = async (isLoadMore = false) => {
     } else {
       feedItems.value = finalItems;
     }
+
     hasMore.value = searchParams.page < windowRes.pages;
   } catch (error) {
     console.error("Failed to fetch windows:", error);
@@ -286,6 +401,13 @@ const onTagClick = (tag) => {
   fetchInitialFeed();
 };
 
+const changeSort = (sortOption) => {
+  activeSortKey.value = sortOption.key;
+  searchParams.sortBy = sortOption.sortBy;
+  searchParams.order = sortOption.order;
+  fetchInitialFeed();
+};
+
 const onClearAllTags = () => {
   activeTags.value = [];
   fetchInitialFeed();
@@ -305,28 +427,135 @@ const onReachBottom = () => {
 
 const goToDetail = (item) => {
   if (item.type === "dish") {
-    uni.navigateTo({
-      url: `/pages/dishDetail/dishDetail?id=${item.dishId}`,
-    });
+    navigateTo(RoutePath.DISH_DETAIL, { id: item.dishId });
   } else {
-    uni.navigateTo({
-      url: `/pages/windowDetail/windowDetail?id=${item.windowId}`,
-    });
+    navigateTo(RoutePath.WINDOW_DETAIL, { id: item.windowId });
   }
 };
 
 // --- Lifecycle ---
 onMounted(() => {
+  // 获取状态栏高度
+  const systemInfo = uni.getSystemInfoSync();
+  const statusBarHeight = systemInfo.statusBarHeight;
+  if (statusBarHeight) {
+    document.documentElement.style.setProperty(
+      "--status-bar-height",
+      `${statusBarHeight}px`
+    );
+  }
+
   fetchTags();
   fetchInitialFeed();
 });
 </script>
 
 <style scoped>
+/* Enhanced Navigation Bar */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff7a45 100%);
+  box-shadow: 0 2rpx 12rpx rgba(255, 140, 0, 0.3);
+}
+
+.navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  padding-top: calc(20rpx + var(--status-bar-height, 0));
+  width: 100%;
+}
+
+.navbar-left {
+  display: flex;
+  flex-direction: column;
+  padding-left: 30rpx;
+}
+
+.app-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.app-subtitle {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 4rpx;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  padding-right: 30rpx;
+}
+
+.nav-icon-item {
+  position: relative;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.nav-icon-item:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.nav-icon-item:active {
+  transform: scale(0.95);
+}
+
+.user-avatar {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  object-fit: cover;
+}
+
+.badge {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  background-color: #ff4757;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 600;
+  padding: 4rpx 8rpx;
+  border-radius: 12rpx;
+  min-width: 24rpx;
+  text-align: center;
+  line-height: 1;
+}
+
+.nav-text-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-icon {
+  color: #fff;
+  font-size: 28rpx;
+  line-height: 1;
+}
+
 /* Hero Section */
 .hero-section {
   position: relative;
-  height: 400rpx;
+  height: 320rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -419,6 +648,29 @@ onMounted(() => {
   font-size: 24rpx;
 }
 
+/* Sorting Section */
+.sort-section {
+  display: flex;
+  padding: 0 20rpx 20rpx;
+  background-color: #f7f8fa;
+  gap: 20rpx;
+  align-items: center;
+}
+.sort-option {
+  padding: 10rpx 24rpx;
+  border-radius: 30rpx;
+  background-color: #fff;
+  color: #6b7280;
+  font-size: 28rpx;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.sort-option.active {
+  background-color: #ff8c00;
+  color: white;
+  font-weight: 600;
+}
+
 /* Main Container */
 .index-container {
   display: flex;
@@ -428,9 +680,7 @@ onMounted(() => {
 }
 
 .window-list-scroll {
-  height: calc(
-    100vh - 400rpx - 120rpx
-  ); /* Adjust based on hero and tag section height */
+  height: calc(100vh - 480rpx); /* 调整高度以适应新的导航栏 */
 }
 
 /* Window List Grid (retained from previous) */

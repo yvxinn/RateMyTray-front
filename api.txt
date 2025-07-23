@@ -1,0 +1,607 @@
+# 获取菜品详情
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/dishes/{dishId}:
+    get:
+      summary: 获取菜品详情
+      deprecated: false
+      description: ''
+      tags:
+        - 食堂窗口管理模块
+      parameters:
+        - name: dishId
+          in: path
+          description: ''
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    x-apifox-mock: '0'
+                    description: 0表示成功
+                  msg:
+                    type: string
+                    x-apifox-mock: success
+                    description: 错误说明
+                  data:
+                    type: object
+                    properties: {}
+                    x-apifox-orders: []
+                    description: 返回数据
+                x-apifox-orders:
+                  - code
+                  - msg
+                  - data
+                required:
+                  - code
+                  - msg
+                  - data
+              example:
+                code: 200
+                message: 获取菜品详情成功
+                data:
+                  dishId: 1
+                  name: 麻辣香锅
+                  description: 自选食材，秘制底料，麻辣过瘾。
+                  imageUrl: https://example.com/dishes/mlxg.jpg
+                  price: 30
+                  popularity: 580
+                  windowId: 1
+                  windowName: 超值麻辣烫
+                  tags:
+                    - 川菜
+                    - 午餐
+                    - 晚餐
+                    - 辣
+                    - 招牌
+                  averageRating: 4
+                  comments:
+                    - commentId: 8
+                      parentId: null
+                      reviewerName: 匿名用户
+                      rating: 4
+                      content: 味道不错，就是人太多了，每次都要排好久的队。
+                      commentTime: '2025-07-22T12:42:58'
+                      isOfficialReply: false
+                      imageUrls: []
+                      avatar_url: null
+                      helpful_count: 12
+          headers: {}
+          x-apifox-name: 成功
+        x-200:成功:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      dishId:
+                        type: integer
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      imageUrl:
+                        type: string
+                      price:
+                        type: integer
+                      popularity:
+                        type: integer
+                      windowId:
+                        type: integer
+                      windowName:
+                        type: string
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                      averageRating:
+                        type: integer
+                      comments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            commentId:
+                              type: integer
+                            parentId:
+                              type: 'null'
+                            reviewerName:
+                              type: string
+                            rating:
+                              type: integer
+                            content:
+                              type: string
+                            commentTime:
+                              type: string
+                            isOfficialReply:
+                              type: boolean
+                            imageUrls:
+                              type: array
+                              items:
+                                type: string
+                            avatar_url:
+                              type: 'null'
+                            helpful_count:
+                              type: integer
+                    required:
+                      - dishId
+                      - name
+                      - description
+                      - imageUrl
+                      - price
+                      - popularity
+                      - windowId
+                      - windowName
+                      - tags
+                      - averageRating
+                      - comments
+                required:
+                  - code
+                  - message
+                  - data
+          headers: {}
+          x-apifox-name: 成功
+      security: []
+      x-apifox-folder: 食堂窗口管理模块
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/6807520/apis/api-325267027-run
+components:
+  schemas: {}
+  securitySchemes: {}
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+security: []
+
+```
+
+# 获取食堂窗口详情
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/windows/{windowId}:
+    get:
+      summary: 获取食堂窗口详情
+      deprecated: false
+      description: ''
+      tags:
+        - 食堂窗口管理模块
+      parameters:
+        - name: windowId
+          in: path
+          description: ''
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      windowId:
+                        type: integer
+                      windowName:
+                        type: string
+                      description:
+                        type: string
+                      canteenName:
+                        type: string
+                      floor:
+                        type: integer
+                      phoneNumber:
+                        type: string
+                      businessHours:
+                        type: string
+                      coverImageUrl:
+                        type: string
+                      announcement:
+                        type: string
+                      status:
+                        type: string
+                      merchantId:
+                        type: integer
+                        description: 所属商家 ID
+                      averageRating:
+                        type: number
+                      ratingCount:
+                        type: integer
+                      dishes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            dishId:
+                              type: integer
+                            name:
+                              type: string
+                            price:
+                              type: integer
+                            imageUrl:
+                              type: string
+                            description:
+                              type: string
+                            status:
+                              type: string
+                          required:
+                            - dishId
+                            - name
+                            - price
+                            - imageUrl
+                            - description
+                            - status
+                      comments:
+                        type: array
+                        items:
+                          type: string
+                    required:
+                      - windowId
+                      - windowName
+                      - description
+                      - canteenName
+                      - floor
+                      - phoneNumber
+                      - businessHours
+                      - coverImageUrl
+                      - announcement
+                      - status
+                      - merchantId
+                      - averageRating
+                      - ratingCount
+                      - dishes
+                      - comments
+                required:
+                  - code
+                  - message
+                  - data
+              example:
+                code: 200
+                message: 获取窗口详情成功
+                data:
+                  windowId: 1
+                  windowName: 川湘百味
+                  description: 正宗川湘口味，麻辣鲜香，无辣不欢。主营麻辣香锅、小炒等。
+                  canteenName: 第一食堂
+                  floor: 2
+                  phoneNumber: '13800010001'
+                  businessHours: '{"mon-fri": "10:30-20:30", "sat-sun": "11:00-20:00"}'
+                  coverImageUrl: /upload/windows/default.png
+                  announcement: 新到双椒小炒肉，欢迎品尝！
+                  status: open
+                  merchantId: 2
+                  averageRating: 4.3
+                  ratingCount: 150
+                  dishes:
+                    - dishId: 1
+                      name: 麻辣香锅
+                      price: 30
+                      imageUrl: /upload/dishes/default.png
+                      description: 自选食材，秘制底料，麻辣过瘾。
+                      status: pending
+                    - dishId: 2
+                      name: 农家小炒肉
+                      price: 22
+                      imageUrl: /upload/dishes/default.png
+                      description: 经典湘菜，辣椒炒五花肉，香辣下饭。
+                      status: pending
+                  comments: []
+          headers: {}
+          x-apifox-name: 成功
+      security: []
+      x-apifox-folder: 食堂窗口管理模块
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/6807520/apis/api-325199496-run
+components:
+  schemas: {}
+  securitySchemes: {}
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+security: []
+
+```
+# 获取食堂窗口列表
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/windows:
+    get:
+      summary: 获取食堂窗口列表
+      deprecated: false
+      description: ''
+      tags:
+        - 食堂窗口管理模块
+      parameters:
+        - name: name
+          in: query
+          description: 名称
+          required: false
+          schema:
+            type: string
+        - name: location
+          in: query
+          description: 位置信息
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: 营业状态
+          required: false
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          description: 排序字段
+          required: false
+          schema:
+            type: string
+        - name: order
+          in: query
+          description: 排序顺序
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 页码
+          required: false
+          schema:
+            type: string
+        - name: size
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+                      currentPage:
+                        type: integer
+                      windows:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            windowId:
+                              type: integer
+                            name:
+                              type: string
+                            location:
+                              type: string
+                            operatingHours:
+                              type: string
+                            status:
+                              type: string
+                            averageRating:
+                              type: number
+                            rating_count:
+                              type: integer
+                            coverImageUrl:
+                              type: string
+                          required:
+                            - windowId
+                            - name
+                            - location
+                            - operatingHours
+                            - status
+                            - averageRating
+                            - rating_count
+                            - coverImageUrl
+                          x-apifox-orders:
+                            - windowId
+                            - name
+                            - location
+                            - operatingHours
+                            - status
+                            - averageRating
+                            - rating_count
+                            - coverImageUrl
+                    required:
+                      - total
+                      - pages
+                      - currentPage
+                      - windows
+                    x-apifox-orders:
+                      - total
+                      - pages
+                      - currentPage
+                      - windows
+                required:
+                  - code
+                  - message
+                  - data
+                x-apifox-orders:
+                  - code
+                  - message
+                  - data
+              example:
+                code: 200
+                message: 获取窗口列表成功
+                data:
+                  total: 5
+                  pages: 2
+                  currentPage: 1
+                  windows:
+                    - windowId: 1
+                      name: 川湘百味
+                      location: 第一食堂 2楼
+                      operatingHours: 10:30-20:30
+                      status: open
+                      averageRating: 4.3
+                      rating_count: 150
+                      coverImageUrl: http://localhost:8080/images/windows/default.png
+                    - windowId: 2
+                      name: 西北风味
+                      location: 第一食堂 2楼
+                      operatingHours: 10:00-21:00
+                      status: open
+                      averageRating: 4.6
+                      rating_count: 210
+                      coverImageUrl: http://localhost:8080/images/windows/default.png
+                    - windowId: 3
+                      name: 活力西餐
+                      location: 第二食堂 1楼
+                      operatingHours: 11:00-20:00
+                      status: open
+                      averageRating: 4
+                      rating_count: 88
+                      coverImageUrl: http://localhost:8080/images/windows/default.png
+          headers: {}
+          x-apifox-name: 成功
+      security: []
+      x-apifox-folder: 食堂窗口管理模块
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/6807520/apis/api-325153781-run
+components:
+  schemas: {}
+  securitySchemes: {}
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+security: []
+
+```
+# 推送图片
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /api/upload/dishes:
+    post:
+      summary: 推送图片
+      deprecated: false
+      description: 最后一段可为dishes/windows/avatars/comments
+      tags: []
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  example: file://E:\Downloads\default.png
+                  type: string
+                  format: binary
+            examples: {}
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    x-apifox-mock: '0'
+                    description: 0表示成功
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      fileUrl:
+                        type: string
+                    required:
+                      - fileUrl
+                    description: 返回数据
+                required:
+                  - code
+                  - message
+                  - data
+              example:
+                code: 201
+                message: 菜品图片上传成功
+                data:
+                  fileUrl: /upload/dishes/a2087fac-8d76-41ff-958a-22999d390e94.png
+          headers: {}
+          x-apifox-name: 成功
+      security:
+        - bearer: []
+      x-apifox-folder: ''
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/6807520/apis/api-325543433-run
+components:
+  schemas: {}
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+security: []
+
+```

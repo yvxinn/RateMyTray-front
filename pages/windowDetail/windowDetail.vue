@@ -97,7 +97,7 @@
                 :class="['tab-item', currentTab === 1 ? 'active' : '']"
                 @click="currentTab = 1"
               >
-                用户评价 ({{ window.comments.length }})
+                用户评价 ({{ windowComments.length }})
               </view>
             </view>
 
@@ -117,29 +117,34 @@
           <!-- Right Column (Comments) -->
           <view class="right-column">
             <view class="comments-section-title"
-              >用户评价 ({{ window.comments.length }})</view
+              >用户评价 ({{ windowComments.length }})</view
             >
-            <view v-if="window.comments && window.comments.length > 0">
-              <CommentCard
-                v-for="comment in window.comments"
-                :key="comment.commentId"
-                :comment="comment"
-              />
-            </view>
-            <view v-else class="empty-state">暂无用户评价</view>
+
+            <CommentCard
+              v-for="comment in windowComments"
+              :key="comment.commentId"
+              :comment="comment"
+              @refreshComments="fetchWindowDetails"
+              v-if="windowComments.length > 0"
+            />
+            <view v-if="windowComments.length === 0" class="empty-state"
+              >暂无用户评价</view
+            >
           </view>
         </view>
 
         <!-- Comments as Tab Content for Mobile -->
         <view class="tab-content" v-show="currentTab === 1">
-          <view v-if="window.comments && window.comments.length > 0">
-            <CommentCard
-              v-for="comment in window.comments"
-              :key="comment.commentId"
-              :comment="comment"
-            />
-          </view>
-          <view v-else class="empty-state">暂无用户评价</view>
+          <CommentCard
+            v-for="comment in windowComments"
+            :key="comment.commentId"
+            :comment="comment"
+            @refreshComments="fetchWindowDetails"
+            v-if="windowComments.length > 0"
+          />
+          <view v-if="windowComments.length === 0" class="empty-state"
+            >暂无用户评价</view
+          >
         </view>
       </view>
     </scroll-view>
@@ -148,21 +153,141 @@
     <view v-else class="empty-state">
       <text>未找到窗口信息或加载失败</text>
     </view>
+
+    <!-- Floating Action Button -->
+    <view v-if="window" class="fab-container">
+      <button class="fab-button" @click="toggleQuickComment">
+        <uni-icons type="chatboxes" color="#fff" size="24" />
+      </button>
+    </view>
+
+    <!-- Quick Comment Panel -->
+    <view
+      v-if="showQuickComment"
+      class="quick-comment-overlay"
+      @click="cancelQuickComment"
+    >
+      <view class="quick-comment-panel" @click.stop>
+        <view class="quick-comment-header">
+          <text class="quick-comment-title">快速评价</text>
+          <uni-icons
+            type="closeempty"
+            size="20"
+            color="#999"
+            @click="cancelQuickComment"
+          />
+        </view>
+
+        <view class="rating-section">
+          <text class="rating-label">评分：</text>
+          <uni-rate
+            v-model="quickRating"
+            :value="quickRating"
+            size="20"
+            :max="5"
+            :disabled="false"
+            @change="onRatingChange"
+          />
+          <text class="rating-score">{{ quickRating }}.0</text>
+        </view>
+
+        <textarea
+          class="quick-comment-textarea"
+          v-model="quickCommentText"
+          placeholder="分享您的用餐体验..."
+          maxlength="500"
+          :auto-height="true"
+        />
+
+        <!-- Image Upload Section -->
+        <view class="image-upload-section">
+          <view class="image-gallery" v-if="selectedImages.length > 0">
+            <view
+              v-for="(image, index) in selectedImages"
+              :key="index"
+              class="image-item"
+            >
+              <image
+                :src="image.tempPath"
+                class="preview-image"
+                mode="aspectFill"
+              />
+              <view class="image-overlay">
+                <uni-icons
+                  type="close"
+                  size="16"
+                  color="#fff"
+                  @click="removeImage(index)"
+                />
+              </view>
+              <view v-if="image.uploading" class="upload-progress">
+                <text class="upload-text">上传中...</text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            class="add-image-btn"
+            @click="selectImages"
+            v-if="selectedImages.length < 3"
+          >
+            <uni-icons type="camera" size="20" color="#999" />
+            <text class="add-image-text"
+              >添加图片 ({{ selectedImages.length }}/3)</text
+            >
+          </view>
+        </view>
+
+        <view class="quick-comment-actions">
+          <view class="char-count">{{ quickCommentText.length }}/500</view>
+          <view class="action-buttons">
+            <button class="cancel-btn" @click="cancelQuickComment">取消</button>
+            <button
+              class="submit-btn"
+              @click="submitQuickComment"
+              :disabled="!quickRating || isSubmittingQuick"
+            >
+              {{ isSubmittingQuick ? "提交中..." : "发布评价" }}
+            </button>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
-import { getWindowDetail } from "@/services/api.js";
+import { ref, computed } from "vue";
+import { onLoad, onShow } from "@dcloudio/uni-app";
+import { getWindowDetail, submitComment, uploadFile } from "@/services/api.js";
 import DishCard from "@/components/DishCard.vue";
 import CommentCard from "@/components/CommentCard.vue";
 import { useResolveImagePath } from "@/utils/useResolveImagePath.js";
+import { navigateTo, RoutePath } from "@/utils/router.js";
 
 const windowId = ref(null);
 const window = ref(null);
 const isLoading = ref(true);
 const currentTab = ref(0); // 0 for dishes, 1 for comments
+
+// Quick comment functionality
+const showQuickComment = ref(false);
+const quickRating = ref(0);
+const quickCommentText = ref("");
+const isSubmittingQuick = ref(false);
+
+// 不再需要商家权限检查，所有用户都可以回复评论
+// const isCurrentUserMerchant = computed(() => {
+//   const userInfo = uni.getStorageSync('user');
+//   if (!userInfo || !window.value) return false;
+//
+//   try {
+//     const user = typeof userInfo === 'string' ? JSON.parse(userInfo) : userInfo;
+//     return user.role === 'merchant' && user.userId === window.value.merchantId;
+//   } catch {
+//     return false;
+//   }
+// });
 
 const resolveImagePath = (path, isAvatar = false) => {
   const defaultImage = isAvatar
@@ -202,6 +327,10 @@ const fetchWindowDetails = async () => {
   try {
     const data = await getWindowDetail(windowId.value);
 
+    // Debug: 打印返回的数据结构
+    console.log("Window Detail API Response:", data);
+    console.log("Comments in response:", data.comments);
+
     // The API is expected to return the full data structure including
     // merchant, announcement, and tags within dishes.
     // No more mocking is needed.
@@ -229,12 +358,165 @@ const fetchWindowDetails = async () => {
     isLoading.value = false;
   }
 };
+
+// Computed properties for comments
+const windowComments = computed(() => {
+  if (!window.value?.comments || !Array.isArray(window.value.comments)) {
+    return [];
+  }
+
+  // 只显示非官方回复的评论（窗口评价）
+  // 如果有 targetType 字段，优先显示窗口评论；否则显示所有评论（向后兼容）
+  return window.value.comments.filter((c) => {
+    if (!c.isOfficialReply) {
+      // 如果有 targetType 字段，只显示窗口评论
+      if (c.targetType) {
+        return c.targetType === "window";
+      }
+      // 如果没有 targetType 字段，默认显示所有非官方回复的评论
+      return true;
+    }
+    return false;
+  });
+});
+
+// Quick comment functions
+const toggleQuickComment = () => {
+  showQuickComment.value = !showQuickComment.value;
+  if (showQuickComment.value) {
+    // Reset form
+    quickRating.value = 0;
+    quickCommentText.value = "";
+  }
+};
+
+const cancelQuickComment = () => {
+  showQuickComment.value = false;
+  quickRating.value = 0;
+  quickCommentText.value = "";
+  selectedImages.value = [];
+};
+
+const onRatingChange = (e) => {
+  quickRating.value = e.detail.value;
+};
+
+const selectedImages = ref([]);
+
+const selectImages = () => {
+  uni.chooseImage({
+    count: 3 - selectedImages.value.length, // 最多选择3张
+    sizeType: ["original", "compressed"], // 可以指定是原图还是压缩图
+    sourceType: ["album", "camera"], // 可以指定来源是相册还是相机
+    success: (res) => {
+      const tempFilePaths = res.tempFilePaths;
+      tempFilePaths.forEach((path) => {
+        selectedImages.value.push({ tempPath: path, uploading: false });
+      });
+    },
+  });
+};
+
+const removeImage = (index) => {
+  selectedImages.value.splice(index, 1);
+};
+
+const submitQuickComment = async () => {
+  if (isSubmittingQuick.value) return;
+
+  if (!quickRating.value) {
+    uni.showToast({
+      title: "请选择评分",
+      icon: "none",
+    });
+    return;
+  }
+
+  if (!quickCommentText.value.trim() && selectedImages.value.length === 0) {
+    uni.showToast({
+      title: "请输入评价内容或添加图片",
+      icon: "none",
+    });
+    return;
+  }
+
+  isSubmittingQuick.value = true;
+
+  try {
+    // 先上传图片获取URL
+    const imageUrls = [];
+
+    if (selectedImages.value.length > 0) {
+      uni.showToast({
+        title: "正在上传图片...",
+        icon: "loading",
+        duration: 2000,
+      });
+
+      for (let i = 0; i < selectedImages.value.length; i++) {
+        const image = selectedImages.value[i];
+        image.uploading = true;
+
+        try {
+          const uploadResult = await uploadFile("comments", image.tempPath);
+          imageUrls.push(uploadResult.fileUrl);
+        } catch (uploadError) {
+          console.error("图片上传失败:", uploadError);
+          uni.showToast({
+            title: `第${i + 1}张图片上传失败`,
+            icon: "none",
+          });
+          return;
+        } finally {
+          image.uploading = false;
+        }
+      }
+    }
+
+    // 提交评论
+    const commentData = {
+      targetType: "window",
+      targetId: window.value.windowId,
+      rating: quickRating.value,
+      content: quickCommentText.value.trim(),
+      imageUrls: imageUrls, // 使用上传后的图片URL
+      isAnonymous: false,
+    };
+
+    await submitComment(commentData);
+
+    uni.showToast({
+      title: "评价发布成功",
+      icon: "success",
+    });
+
+    // Hide comment panel and refresh data
+    cancelQuickComment();
+    fetchWindowDetails();
+  } catch (error) {
+    console.error("Quick comment submission failed:", error);
+    uni.showToast({
+      title: "评价发布失败，请重试",
+      icon: "none",
+    });
+  } finally {
+    isSubmittingQuick.value = false;
+  }
+};
+
+const goToComment = () => {
+  navigateTo(RoutePath.COMMENT, {
+    targetType: "window",
+    targetId: windowId.value,
+  });
+};
 </script>
 
 <style scoped>
 .detail-container {
   background-color: #f7f8fa;
   min-height: 100vh;
+  position: relative;
 }
 .scroll-view {
   height: 100vh;
@@ -381,18 +663,6 @@ const fetchWindowDetails = async () => {
   .right-column {
     flex: 2;
     min-width: 0;
-    background-color: #fff;
-    border-radius: 16rpx;
-    padding: 30rpx;
-    box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.05);
-  }
-
-  .comments-section-title {
-    font-size: 34rpx;
-    font-weight: 600;
-    margin-bottom: 20rpx;
-    padding-bottom: 20rpx;
-    border-bottom: 1px solid #f0f0f0;
   }
 
   /* Hide mobile-only elements on desktop */
@@ -457,5 +727,295 @@ const fetchWindowDetails = async () => {
 .announcement-text {
   font-size: 26rpx;
   margin-left: 12rpx;
+}
+
+.comments-section-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+  padding: 30rpx 30rpx 20rpx;
+  background-color: #fff;
+  border-radius: 16rpx 16rpx 0 0;
+  border-bottom: 1px solid #f0f0f0;
+  box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.fab-container {
+  position: fixed;
+  bottom: 60rpx;
+  right: 30rpx;
+  z-index: 999;
+}
+
+.fab-button {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 60rpx;
+  background-color: #2563eb;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 16rpx rgba(37, 99, 235, 0.3);
+}
+
+.fab-button::after {
+  border: none;
+}
+
+/* Quick Comment Panel Styles */
+.quick-comment-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.quick-comment-panel {
+  background-color: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  width: 100%;
+  max-width: 600rpx;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100rpx);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.quick-comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.quick-comment-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.rating-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rating-label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #555;
+  margin-right: 10rpx;
+}
+
+.rating-score {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #f59e0b;
+  margin-left: 10rpx;
+}
+
+.quick-comment-textarea {
+  width: 100%;
+  min-height: 120rpx;
+  border: 1px solid #ddd;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #333;
+  box-sizing: border-box;
+  margin-bottom: 20rpx;
+  line-height: 1.5;
+  resize: none;
+  background-color: #fafafa;
+}
+
+.image-upload-section {
+  margin-top: 20rpx;
+  margin-bottom: 20rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1px solid #eee;
+}
+
+.image-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 8rpx;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 4rpx;
+  right: 4rpx;
+  width: 32rpx;
+  height: 32rpx;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.upload-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+}
+
+.upload-text {
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.add-image-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+  border: 1px dashed #ccc;
+  color: #999;
+  font-size: 24rpx;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.add-image-btn:hover {
+  background-color: #e9ecef;
+  border-color: #999;
+  color: #666;
+}
+
+.add-image-text {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+}
+
+.quick-comment-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 30rpx;
+}
+
+.char-count {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 20rpx;
+}
+
+.cancel-btn {
+  background-color: #f5f5f5;
+  color: #666;
+  padding: 12rpx 24rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  border: none;
+  transition: background-color 0.3s;
+}
+
+.cancel-btn:active {
+  background-color: #e0e0e0;
+}
+
+.submit-btn {
+  background-color: #2563eb;
+  color: #fff;
+  padding: 12rpx 24rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 4rpx 8rpx rgba(37, 99, 235, 0.3);
+  transition: background-color 0.3s;
+}
+
+.submit-btn:active {
+  background-color: #1d4ed8;
+}
+
+.submit-btn:disabled {
+  background-color: #ccc;
+  color: #888;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Empty State for Comments */
+.right-column .empty-state {
+  text-align: center;
+  padding: 80rpx 30rpx;
+  color: #9ca3af;
+  font-size: 28rpx;
+  background-color: #fff;
+  border-radius: 0 0 16rpx 16rpx;
+  margin-top: -1rpx;
+  box-shadow: 0 8rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.tab-content .empty-state {
+  text-align: center;
+  padding: 60rpx 30rpx;
+  color: #9ca3af;
+  font-size: 28rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  margin-top: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
 }
 </style>

@@ -25,24 +25,42 @@
     <text class="word-count">{{ content.length }}/200</text>
 
     <view class="image-upload-section">
-      <text class="label">上传图片 (可选):</text>
-      <view class="image-preview" v-if="imageUrl">
-        <image :src="imageUrl" mode="aspectFit" class="uploaded-image"></image>
-        <uni-icons
-          type="clear"
-          size="24"
-          color="#dc3545"
-          class="clear-icon"
-          @click="clearImage"
-        ></uni-icons>
+      <text class="label">上传图片 (可选, 最多3张):</text>
+
+      <!-- Image Gallery -->
+      <view class="image-gallery" v-if="selectedImages.length > 0">
+        <view
+          v-for="(image, index) in selectedImages"
+          :key="index"
+          class="image-item"
+        >
+          <image
+            :src="image.url || image.tempPath"
+            class="preview-image"
+            mode="aspectFill"
+          />
+          <view class="image-overlay" @click="removeImage(index)">
+            <uni-icons type="close" size="16" color="#fff" />
+          </view>
+          <view v-if="image.uploading" class="upload-progress">
+            <text class="upload-text">上传中...</text>
+          </view>
+        </view>
       </view>
+
+      <!-- Add Image Button -->
       <button
-        v-else
+        v-if="selectedImages.length < 3"
         class="upload-button"
-        @click="chooseImage"
+        @click="chooseImages"
         :disabled="isUploadingImage"
       >
-        {{ isUploadingImage ? "上传中..." : "选择图片" }}
+        <uni-icons type="camera" size="20" color="#666" />
+        <text>{{
+          isUploadingImage
+            ? "上传中..."
+            : `选择图片 (${selectedImages.length}/3)`
+        }}</text>
       </button>
     </view>
 
@@ -74,7 +92,7 @@ const targetType = ref(""); // "dish" or "window"
 const targetId = ref(null);
 const rating = ref(0);
 const content = ref("");
-const imageUrl = ref("");
+const selectedImages = ref([]); // 改为数组支持多张图片
 const isAnonymous = ref(false);
 const isSubmitting = ref(false);
 const isUploadingImage = ref(false);
@@ -101,13 +119,22 @@ const setRating = (score) => {
   rating.value = score;
 };
 
-const chooseImage = async () => {
+const chooseImages = async () => {
   if (isUploadingImage.value) return;
+
+  const maxCount = 3 - selectedImages.value.length;
+  if (maxCount <= 0) {
+    uni.showToast({
+      title: "最多只能选择3张图片",
+      icon: "none",
+    });
+    return;
+  }
 
   try {
     const res = await uni.chooseImage({
-      count: 1,
-      sizeType: ["compressed"],
+      count: maxCount,
+      sizeType: ["original", "compressed"],
       sourceType: ["album", "camera"],
     });
 
@@ -116,17 +143,45 @@ const chooseImage = async () => {
       title: "图片上传中...",
     });
 
-    const uploadedImageUrl = await uploadFile("comments", res.tempFilePaths[0]);
-    imageUrl.value = uploadedImageUrl;
+    // 添加临时图片到数组中
+    const tempImages = res.tempFilePaths.map((path) => ({
+      tempPath: path,
+      uploading: true,
+      url: null,
+    }));
+    selectedImages.value.push(...tempImages);
+
+    // 逐个上传图片
+    for (let i = 0; i < tempImages.length; i++) {
+      const image = tempImages[i];
+      try {
+        const uploadResult = await uploadFile("comments", image.tempPath);
+        image.url = uploadResult.fileUrl;
+        image.uploading = false;
+      } catch (error) {
+        console.error("图片上传失败:", error);
+        // 上传失败的图片从数组中移除
+        const index = selectedImages.value.findIndex(
+          (img) => img.tempPath === image.tempPath
+        );
+        if (index > -1) {
+          selectedImages.value.splice(index, 1);
+        }
+        uni.showToast({
+          title: `第${i + 1}张图片上传失败`,
+          icon: "none",
+        });
+      }
+    }
 
     uni.showToast({
-      title: "图片上传成功",
+      title: "图片上传完成",
       icon: "success",
     });
   } catch (error) {
-    console.error("图片上传或选择失败:", error);
+    console.error("图片选择失败:", error);
     uni.showToast({
-      title: "图片上传失败",
+      title: "图片选择失败",
       icon: "none",
     });
   } finally {
@@ -135,8 +190,8 @@ const chooseImage = async () => {
   }
 };
 
-const clearImage = () => {
-  imageUrl.value = "";
+const removeImage = (index) => {
+  selectedImages.value.splice(index, 1);
 };
 
 const toggleAnonymous = (e) => {
@@ -153,7 +208,7 @@ const submitComment = async () => {
     });
     return;
   }
-  if (!content.value.trim() && !imageUrl.value) {
+  if (!content.value.trim() && !selectedImages.value.length) {
     uni.showToast({
       title: "评价内容或图片至少填一项",
       icon: "none",
@@ -172,7 +227,9 @@ const submitComment = async () => {
       targetId: targetId.value,
       rating: rating.value,
       content: content.value.trim(),
-      imageUrl: imageUrl.value,
+      imageUrls: selectedImages.value
+        .map((img) => img.url)
+        .filter((url) => url), // 只包含已上传成功的图片
       isAnonymous: isAnonymous.value,
     });
     uni.showToast({
@@ -261,45 +318,92 @@ const submitComment = async () => {
   padding-right: 30rpx; /* 与textarea对齐 */
 }
 
-.upload-button {
-  width: 100%;
-  height: 90rpx;
-  background-color: #007aff;
-  color: #fff;
-  border-radius: 20rpx;
-  font-size: 32rpx;
-  line-height: 90rpx;
-  text-align: center;
+.image-upload-section {
+  margin: 40rpx 0;
 }
 
-.upload-button[disabled] {
-  background-color: #90caf9;
-}
-
-.image-preview {
-  position: relative;
-  width: 100%;
-  height: 300rpx;
+.image-gallery {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #f0f0f0;
-  border-radius: 20rpx;
-  overflow: hidden;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
 }
 
-.uploaded-image {
+.image-item {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.preview-image {
   width: 100%;
   height: 100%;
+  object-fit: cover;
 }
 
-.clear-icon {
+.image-overlay {
   position: absolute;
-  top: 10rpx;
-  right: 10rpx;
-  background-color: rgba(255, 255, 255, 0.8);
+  top: 8rpx;
+  right: 8rpx;
+  width: 48rpx;
+  height: 48rpx;
+  background-color: rgba(0, 0, 0, 0.6);
   border-radius: 50%;
-  padding: 5rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.upload-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+}
+
+.upload-text {
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.upload-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 30rpx;
+  border: 2rpx dashed #ccc;
+  border-radius: 12rpx;
+  background-color: #fafafa;
+  color: #666;
+  font-size: 28rpx;
+  transition: all 0.3s ease;
+}
+
+.upload-button:hover {
+  border-color: #2563eb;
+  background-color: #f0f8ff;
+  color: #2563eb;
+}
+
+.upload-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-button::after {
+  border: none;
 }
 
 .anonymous-section {

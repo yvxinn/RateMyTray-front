@@ -1,77 +1,89 @@
 {
-	"pages": [
-		{
-			"path": "pages/login/login",
-			"style": {
-				"navigationBarTitleText": "用户登录"
-			}
-		},
-		{
-			"path": "pages/index/index",
-			"style": {
-				"navigationBarTitleText": "小众点评 - 食堂窗口"
-			}
-		},
-		{
-			"path": "pages/windowDetail/windowDetail",
-			"style": {
-				"navigationBarTitleText": "窗口详情"
-			}
-		},
-		{
-			"path": "pages/register/register",
-			"style": {
-				"navigationBarTitleText": "用户注册"
-			}
-		},
-		{
-			"path": "pages/profile/profile",
-			"style": {
-				"navigationBarTitleText": "个人中心"
-			}
-		},
-		{
-			"path": "pages/comment/comment",
-			"style": {
-				"navigationBarTitleText": "发布评价"
-			}
-		},
-		{
-			"path": "pages/favorites/favorites",
-			"style": {
-				"navigationBarTitleText": "我的收藏"
-			}
-		},
-		{
-			"path": "pages/notifications/notifications",
-			"style": {
-				"navigationBarTitleText": "消息中心"
-			}
-		},
-		{
-			"path": "pages/merchant/windowManage/windowManage",
-			"style": {
-				"navigationBarTitleText": "我的窗口"
-			}
-		},
-		{
-			"path": "pages/merchant/dishManage/dishManage",
-			"style": {
-				"navigationBarTitleText": "菜品管理"
-			}
-		},
-		{
-			"path": "pages/merchant/dishForm/dishForm",
-			"style": {
-				"navigationBarTitleText": "菜品编辑"
-			}
-		}
-	],
-	"globalStyle": {
-		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "小众点评",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
-	},
-	"uniIdRouter": {}
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "用户登录"
+      }
+    },
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/windowDetail/windowDetail",
+      "style": {
+        "navigationBarTitleText": "窗口详情"
+      }
+    },
+    {
+      "path": "pages/dishDetail/dishDetail",
+      "style": {
+        "navigationBarTitleText": "菜品详情"
+      }
+    },
+    {
+      "path": "pages/register/register",
+      "style": {
+        "navigationBarTitleText": "用户注册"
+      }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "个人中心"
+      }
+    },
+    {
+      "path": "pages/comment/comment",
+      "style": {
+        "navigationBarTitleText": "发布评价"
+      }
+    },
+    {
+      "path": "pages/favorites/favorites",
+      "style": {
+        "navigationBarTitleText": "我的收藏"
+      }
+    },
+    {
+      "path": "pages/notifications/notifications",
+      "style": {
+        "navigationBarTitleText": "消息中心"
+      }
+    },
+    {
+      "path": "pages/merchant/windowManage/windowManage",
+      "style": {
+        "navigationBarTitleText": "我的窗口"
+      }
+    },
+    {
+      "path": "pages/merchant/dishManage/dishManage",
+      "style": {
+        "navigationBarTitleText": "菜品管理"
+      }
+    },
+    {
+      "path": "pages/merchant/dishForm/dishForm",
+      "style": {
+        "navigationBarTitleText": "菜品编辑"
+      }
+    },
+    {
+      "path": "pages/profile/edit",
+      "style": {
+        "navigationBarTitleText": "编辑个人信息"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "小众点评",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8"
+  },
+  "uniIdRouter": {}
 }
